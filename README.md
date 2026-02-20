@@ -4,7 +4,7 @@
 
 ---
 
-## 1. 프로젝트 개요
+## 1. Project Overview (프로젝트 개요)
 
 Hackymocchi(해키모찌)는 URL을 입력받아 웹 애플리케이션의 HTML/JavaScript 코드를 수집하고,
 RAG(Retrieval-Augmented Generation) 기반 LLM을 활용해 **보안 취약점을 분석**하는 프로젝트입니다.
@@ -33,7 +33,7 @@ RAG(Retrieval-Augmented Generation) 기반 LLM을 활용해 **보안 취약점�
 
 ---
 
-## 4. 아키텍처 개요
+## 4. Architecture Overview (아키텍처 개요)
 
 ```
 [사용자 URL 입력]
@@ -53,7 +53,7 @@ RAG(Retrieval-Augmented Generation) 기반 LLM을 활용해 **보안 취약점�
 
 ---
 
-## 5. 데이터 소스
+## 5. Vulnerability Data Sources (데이터 소스)
 
 [NVD (National Vulnerability Database)](https://nvd.nist.gov/vuln/data-feeds) – CVE, CVSS, 공식 보안 권고
 
@@ -67,7 +67,7 @@ RAG(Retrieval-Augmented Generation) 기반 LLM을 활용해 **보안 취약점�
 
 ---
 
-## 6. 데이터 처리 파이프라인
+## 6. Data Processing Pipeline (데이터처리 파이프라인)
 
 1. 취약점 데이터 전처리 - 텍스트 정규화 / 메타데이터 제거 / 취약점 유형 구조화
 
@@ -79,7 +79,7 @@ RAG(Retrieval-Augmented Generation) 기반 LLM을 활용해 **보안 취약점�
 
 ---
 
-## 7. 기술 스택
+## 7. Technology Stack (기술 스택)
 
 * **Language:** Python
 * **Framework:** LangChain
@@ -90,7 +90,7 @@ RAG(Retrieval-Augmented Generation) 기반 LLM을 활용해 **보안 취약점�
 
 ---
 
-## 8. 주요 기능
+## 8. Key Features (주요 기능)
 
 * URL 입력 기반 웹 크롤링
 * HTML / JavaScript 코드 수집
@@ -110,7 +110,7 @@ pip install -r requirements.txt
 
 ---
 
-## 10. 사용 방법 (Usage)
+## 10. Usage (사용 방법)
 
 주어진 화면에 타켓 URL 입력
 
@@ -123,7 +123,7 @@ pip install -r requirements.txt
 
 ---
 
-## 11. 윤리 및 법적 고지 (Responsible Use & Legal Notice)
+## 11. Responsible Use & Legal Notice (윤리 및 법적 고지)
 
 ### 목적
 
