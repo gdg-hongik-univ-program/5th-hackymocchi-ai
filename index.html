@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HackyMocchi - Autonomous Pentest Agent</title>
+<style>
+/* ── Reset + Variables ───────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+
+:root{
+  --bg:#0f1117; --bg-card:#171921; --bg-input:#1e2028;
+  --bg-hover:#22252e;
+  --border:#2d303a; --border-hover:#3e4250;
+  --text:#e8e8ec; --text-muted:#b0b4c0; --text-dim:#7d8290;
+  --accent:#4b8df8; --accent-hover:#3572d9;
+  --green:#2dd268; --green-bg:rgba(45,210,104,.1);
+  --yellow:#f0b816; --yellow-bg:rgba(240,184,22,.1);
+  --red:#f05252; --red-bg:rgba(240,82,82,.1);
+  --font-mono:'SF Mono','Cascadia Code','Fira Code','Consolas',monospace;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --radius:8px; --radius-lg:12px;
+  --shadow-card:0 1px 3px rgba(0,0,0,.25);
+  --shadow-tooltip:0 8px 32px rgba(0,0,0,.45);
+  --fw-normal:470; --fw-medium:540; --fw-semi:640; --fw-bold:740;
+}
+
+[data-theme="light"]{
+  --bg:#f5f6f8; --bg-card:#ffffff; --bg-input:#eef0f4;
+  --bg-hover:#e8eaef;
+  --border:#d4d7de; --border-hover:#bcc0c9;
+  --text:#1a1d26; --text-muted:#3d4252; --text-dim:#6b7080;
+  --green:#178a42; --green-bg:rgba(23,138,66,.08);
+  --shadow-card:0 1px 4px rgba(0,0,0,.08);
+  --shadow-tooltip:0 8px 32px rgba(0,0,0,.14);
+}
+
+body{
+  font-family:var(--font-sans); background:var(--bg); color:var(--text);
+  font-size:16px; line-height:1.65; min-height:100vh;
+  font-weight:var(--fw-normal);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+
+/* ── Layout ──────────────────────────────────────────────────────── */
+.container{max-width:900px;margin:0 auto;padding:28px 24px 48px;}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+.header{text-align:center;padding:36px 0 28px;position:relative;}
+.header-title{
+  font-size:2.6rem;font-weight:var(--fw-bold);letter-spacing:2px;
+  position:relative;display:inline-block;
+}
+.header-subtitle{
+  font-size:0.82rem;color:var(--text-dim);text-transform:uppercase;
+  letter-spacing:2px;margin-top:6px;font-weight:var(--fw-semi);
+}
+
+.theme-btn{
+  position:absolute;right:0;top:50%;transform:translateY(-50%);
+  width:40px;height:34px;display:flex;align-items:center;justify-content:center;
+  background:var(--bg-input);border:1px solid var(--border);
+  color:var(--text-muted);border-radius:var(--radius);cursor:pointer;
+  font-size:15px;font-weight:var(--fw-medium);
+  transition:border-color .15s, color .15s, background-color .15s;
+}
+.theme-btn:hover{border-color:var(--border-hover);color:var(--text);}
+
+/* ── Input Section ───────────────────────────────────────────────── */
+.input-section{margin-bottom:28px;}
+.input-label{
+  font-size:1rem;font-weight:var(--fw-bold);margin-bottom:8px;
+  display:block;text-transform:uppercase;letter-spacing:.4px;
+}
+.url-input{
+  width:100%;padding:14px 16px;
+  background:var(--bg-input);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius);
+  font-family:var(--font-mono);font-size:14px;
+  font-weight:var(--fw-normal);
+  outline:none;transition:border-color .15s;
+}
+.url-input:focus{border-color:var(--accent);}
+.url-input::placeholder{color:var(--text-dim);}
+
+.controls{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap;}
+
+.analyze-btn{
+  padding:9px 28px;background:var(--accent);color:#fff;border:none;
+  border-radius:var(--radius);font-weight:var(--fw-medium);
+  font-size:14.5px;cursor:pointer;transition:background .15s;
+  margin-left:auto;
+}
+.analyze-btn:hover{background:var(--accent-hover);}
+.analyze-btn:disabled{opacity:.45;cursor:not-allowed;}
+
+.hint-text{font-size:13px;color:var(--text-dim);font-weight:var(--fw-normal);}
+
+/* ── Pipeline Timeline ───────────────────────────────────────────── */
+#pipeline{display:none;margin-bottom:24px;}
+.pipeline-box{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:22px 24px;
+  box-shadow:var(--shadow-card);
+}
+.pl-header{
+  font-weight:var(--fw-bold);font-size:1rem;margin-bottom:14px;
+  letter-spacing:.2px;text-transform:uppercase;
+}
+
+.pl-steps{display:flex;flex-direction:column;gap:0;position:relative;}
+
+.pl-step{
+  display:flex;align-items:center;gap:12px;
+  padding:9px 0;font-size:14.5px;color:var(--text-dim);
+  position:relative;font-weight:var(--fw-normal);
+  padding-left:30px;
+  transition:color .4s ease, font-weight .2s ease;
+}
+.pl-step::before{
+  content:"";position:absolute;left:9px;top:0;bottom:0;
+  width:2px;background:var(--border);
+  transition:background .5s ease;
+}
+.pl-step:first-child::before{top:50%;}
+.pl-step:last-child::before{bottom:50%;}
+.pl-step::after{
+  content:"";position:absolute;left:4px;top:50%;
+  transform:translateY(-50%);width:12px;height:12px;
+  border-radius:50%;border:2px solid var(--border);
+  background:var(--bg-card);z-index:1;
+  transition:border-color .5s ease, background .5s ease, box-shadow .5s ease;
+}
+
+/* Running */
+.pl-step.running{color:var(--text);font-weight:var(--fw-medium);}
+.pl-step.running::after{
+  border:2px solid transparent;
+  background:
+    radial-gradient(circle, var(--accent) 30%, transparent 55%) no-repeat center/100% 100%,
+    conic-gradient(from 0deg, transparent 0%, var(--accent) 40%, transparent 70%);
+  background-origin:border-box;background-clip:padding-box, border-box;
+  animation:node-spin 1.2s linear infinite, node-pulse 2s ease-in-out infinite;
+  box-shadow:0 0 12px rgba(75,141,248,.3);
+}
+.pl-step.running::before{background:linear-gradient(to bottom, var(--text-muted) 0%, var(--accent) 40%, var(--border) 100%);}
+
+@keyframes node-spin{
+  from{transform:translateY(-50%) rotate(0deg);}
+  to{transform:translateY(-50%) rotate(360deg);}
+}
+@keyframes node-pulse{
+  0%,100%{box-shadow:0 0 8px rgba(75,141,248,.2);}
+  50%{box-shadow:0 0 18px rgba(75,141,248,.45);}
+}
+
+/* Complete */
+.pl-step.complete{color:var(--text);}
+.pl-step.complete::after{border-color:var(--text-muted);background:var(--text-muted);animation:none;box-shadow:none;}
+.pl-step.complete::before{background:var(--text-muted);}
+
+/* Skipped */
+.pl-step.skipped{color:var(--text-dim);}
+.pl-step.skipped::after{border-color:var(--text-dim);background:transparent;}
+
+.pl-label{flex:1;transition:color .4s ease;}
+.pl-elapsed{
+  font-size:12px;color:var(--text-dim);font-family:var(--font-mono);
+  min-width:54px;text-align:right;font-weight:var(--fw-normal);
+}
+
+/* Progress bar */
+.progress-group{margin-top:16px;display:flex;flex-direction:column;gap:10px;}
+.progress-row{display:flex;align-items:center;gap:12px;}
+.progress-label{font-size:13px;color:var(--text-muted);min-width:64px;font-weight:var(--fw-medium);}
+.progress-track{flex:1;height:6px;background:var(--bg-input);border-radius:3px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;transition:width .3s ease;width:0%;background:var(--accent);}
+.progress-pct{font-size:12.5px;color:var(--text-dim);min-width:34px;text-align:right;font-family:var(--font-mono);}
+
+/* Attempt badge */
+.attempt-badge{
+  font-size:11px;color:var(--yellow);background:var(--yellow-bg);
+  border:1px solid rgba(240,184,22,.3);border-radius:4px;
+  padding:1px 7px;font-family:var(--font-mono);font-weight:var(--fw-medium);
+  margin-left:8px;
+}
+
+/* ── Timestamp bar ───────────────────────────────────────────────── */
+.ts-bar{
+  display:none;font-size:13.5px;color:var(--text-dim);
+  justify-content:center;gap:24px;margin-bottom:20px;
+  font-family:var(--font-mono);font-weight:var(--fw-normal);
+}
+.ts-bar .ts-detail{display:none;}
+.ts-bar.finished .ts-detail{display:inline;}
+
+/* ── Result Banner ───────────────────────────────────────────────── */
+.result-banner{
+  border-radius:var(--radius-lg);padding:24px 28px;margin-bottom:20px;
+  display:none;box-shadow:var(--shadow-card);
+}
+.result-banner.SUCCESS{background:var(--green-bg);border:1px solid var(--green);}
+.result-banner.FAILED{background:var(--red-bg);border:1px solid var(--red);}
+
+.result-title{
+  font-size:0.82rem;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--text-muted);margin-bottom:10px;font-weight:var(--fw-bold);
+}
+.result-action{font-size:1.8rem;font-weight:var(--fw-bold);margin-bottom:6px;letter-spacing:.5px;}
+.result-banner.SUCCESS .result-action{color:var(--green);}
+.result-banner.FAILED .result-action{color:var(--red);}
+.result-explain{font-size:15.5px;color:var(--text);line-height:1.6;margin-bottom:12px;font-weight:var(--fw-normal);}
+.result-meta{font-size:14.5px;color:var(--text-dim);font-weight:var(--fw-normal);}
+
+/* ── Sections ────────────────────────────────────────────────────── */
+.section{
+  display:none;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius-lg);margin-bottom:20px;
+  box-shadow:var(--shadow-card);
+}
+.section-head{
+  padding:16px 24px;font-weight:var(--fw-bold);font-size:1rem;
+  border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;
+  letter-spacing:.3px;text-transform:uppercase;
+}
+.section-body{padding:20px 24px;}
+
+/* ── Row pairs ───────────────────────────────────────────────────── */
+.row{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:7px 0;font-size:15.5px;gap:12px;
+  border-bottom:1px solid var(--border);
+}
+.row:last-child{border-bottom:none;}
+.row-label{color:var(--text-muted);font-weight:var(--fw-normal);flex-shrink:0;}
+.row-value{font-weight:var(--fw-semi);text-align:right;word-break:break-all;font-family:var(--font-mono);font-size:14px;}
+.row-value.plain{font-family:var(--font-sans);font-size:15.5px;font-weight:var(--fw-semi);}
+
+/* Sub-label */
+.sub-label{
+  font-size:13.5px;font-weight:var(--fw-bold);
+  color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;
+  margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border);
+}
+.sub-label:first-child{margin-top:0;}
+
+/* Code block */
+.code-block{
+  background:var(--bg-input);border:1px solid var(--border);
+  border-radius:var(--radius);padding:12px 14px;
+  font-family:var(--font-mono);font-size:13px;
+  color:var(--text);white-space:pre-wrap;word-break:break-all;
+  line-height:1.6;margin-top:8px;
+}
+
+/* Helper text */
+.helper-text{
+  font-size:14.5px;color:var(--text-dim);margin-bottom:12px;
+  line-height:1.6;font-weight:var(--fw-normal);
+}
+
+/* Status badges */
+.badge{
+  display:inline-block;font-size:11px;font-weight:var(--fw-bold);
+  padding:2px 10px;border-radius:10px;text-transform:uppercase;letter-spacing:.5px;
+}
+.badge.success{background:var(--green-bg);color:var(--green);}
+.badge.failed{background:var(--red-bg);color:var(--red);}
+.badge.warn{background:var(--yellow-bg);color:var(--yellow);}
+
+/* Indicator tags */
+.indicator-tag{
+  display:inline-block;background:var(--green-bg);color:var(--green);
+  border:1px solid rgba(45,210,104,.3);border-radius:4px;
+  font-size:12px;font-family:var(--font-mono);padding:2px 8px;
+  margin:2px 3px;font-weight:var(--fw-medium);
+}
+
+/* Report markdown */
+.report-body{
+  font-size:15px;line-height:1.75;color:var(--text);
+  font-weight:var(--fw-normal);
+}
+.report-body h2{
+  font-size:1.1rem;font-weight:var(--fw-bold);margin:20px 0 8px;
+  padding-bottom:6px;border-bottom:1px solid var(--border);
+  color:var(--text);letter-spacing:.2px;
+}
+.report-body h2:first-child{margin-top:0;}
+.report-body h3{
+  font-size:0.95rem;font-weight:var(--fw-semi);
+  margin:14px 0 6px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;
+}
+.report-body p{margin-bottom:8px;}
+.report-body p:last-child{margin-bottom:0;}
+.report-body ul{margin:6px 0 10px 18px;}
+.report-body li{margin-bottom:4px;}
+.report-body strong{font-weight:var(--fw-semi);color:var(--text);}
+.report-body em{color:var(--text-dim);font-style:italic;}
+.report-body code{
+  background:var(--bg-input);border:1px solid var(--border);
+  border-radius:4px;padding:1px 6px;
+  font-family:var(--font-mono);font-size:12.5px;color:var(--accent);
+}
+.report-body hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
+
+/* ── Exploitation Guide ──────────────────────────────────────────── */
+.guide-banner{
+  display:none;background:var(--bg-card);
+  border:2px solid var(--red);border-radius:var(--radius-lg);
+  margin-bottom:20px;box-shadow:0 0 24px rgba(240,82,82,.15);overflow:hidden;
+}
+.guide-banner-head{
+  background:var(--red-bg);padding:18px 24px;
+  display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid rgba(240,82,82,.3);
+}
+.guide-banner-icon{font-size:1.6rem;line-height:1;}
+.guide-banner-title{
+  font-size:1.1rem;font-weight:var(--fw-bold);color:var(--red);letter-spacing:.5px;
+}
+.guide-banner-sub{font-size:13px;color:var(--text-muted);margin-top:2px;}
+.guide-open-btn{
+  margin-left:auto;padding:8px 20px;background:var(--red);color:#fff;
+  border:none;border-radius:var(--radius);cursor:pointer;
+  font-size:13.5px;font-weight:var(--fw-semi);
+  transition:background .15s;white-space:nowrap;
+}
+.guide-open-btn:hover{background:#c73e3e;}
+.guide-body{padding:20px 24px;display:flex;flex-direction:column;gap:20px;}
+
+/* Token box */
+.token-box{
+  background:var(--bg-input);border:1px solid var(--red);
+  border-radius:var(--radius);padding:14px 16px;
+}
+.token-box-label{
+  font-size:11px;font-weight:var(--fw-bold);text-transform:uppercase;
+  letter-spacing:.8px;color:var(--red);margin-bottom:8px;display:flex;align-items:center;gap:8px;
+}
+.token-val{
+  font-family:var(--font-mono);font-size:12px;color:var(--text);
+  word-break:break-all;line-height:1.6;
+}
+.copy-btn{
+  margin-left:auto;padding:3px 10px;background:transparent;
+  border:1px solid var(--border);border-radius:4px;
+  color:var(--text-dim);font-size:11px;cursor:pointer;
+  transition:border-color .15s, color .15s;white-space:nowrap;
+}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* Step-by-step guide */
+.guide-steps{display:flex;flex-direction:column;gap:12px;}
+.guide-step{
+  display:flex;gap:14px;align-items:flex-start;
+  padding:14px 16px;background:var(--bg-input);border-radius:var(--radius);
+  border:1px solid var(--border);
+}
+.guide-step-num{
+  width:26px;height:26px;border-radius:50%;
+  background:var(--accent);color:#fff;
+  font-size:13px;font-weight:var(--fw-bold);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.guide-step-content{flex:1;}
+.guide-step-title{font-size:14.5px;font-weight:var(--fw-semi);margin-bottom:4px;}
+.guide-step-desc{font-size:13.5px;color:var(--text-muted);line-height:1.6;}
+.guide-step-code{
+  margin-top:8px;background:var(--bg-card);border:1px solid var(--border);
+  border-radius:4px;padding:8px 12px;
+  font-family:var(--font-mono);font-size:12px;color:var(--accent);
+  white-space:pre-wrap;word-break:break-all;
+}
+
+/* What can attacker do */
+.impact-list{display:flex;flex-direction:column;gap:8px;}
+.impact-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;background:var(--red-bg);
+  border:1px solid rgba(240,82,82,.2);border-radius:var(--radius);
+  font-size:14px;color:var(--text);
+}
+.impact-icon{font-size:1rem;flex-shrink:0;}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media(max-width:600px){
+  .container{padding:14px;}
+  .controls{flex-direction:column;align-items:stretch;}
+  .analyze-btn{margin-left:0;}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Header ──────────────────────────────────────────────────── -->
+  <div class="header">
+    <div class="header-title">HackyMocchi</div>
+    <div class="header-subtitle">Autonomous Pentest Agent</div>
+    <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark theme">&#9788;</button>
+  </div>
+
+  <!-- ── Input ───────────────────────────────────────────────────── -->
+  <div class="input-section">
+    <label class="input-label" for="target-url">Target URL</label>
+    <input
+      id="target-url"
+      class="url-input"
+      type="url"
+      placeholder="http://localhost:3000"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <div class="controls">
+      <span class="hint-text">⚠️ 반드시 허가된 시스템에서만 사용하세요</span>
+      <button id="btn-analyze" class="analyze-btn" onclick="startAnalysis()">Analyze</button>
+    </div>
+  </div>
+
+  <!-- ── Pipeline ────────────────────────────────────────────────── -->
+  <div id="pipeline">
+    <div class="pipeline-box">
+      <div class="pl-header">Analysis Pipeline</div>
+      <div class="pl-steps" id="pl-steps"></div>
+      <div class="progress-group">
+        <div class="progress-row">
+          <span class="progress-label">Overall</span>
+          <div class="progress-track"><div class="progress-fill" id="prog-overall"></div></div>
+          <span class="progress-pct" id="prog-pct">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Timestamp bar ───────────────────────────────────────────── -->
+  <div class="ts-bar" id="ts-bar">
+    <span class="ts-detail" id="ts-start"></span>
+    <span id="ts-elapsed"></span>
+    <span class="ts-detail" id="ts-finish"></span>
+  </div>
+
+  <!-- ── Result Banner ───────────────────────────────────────────── -->
+  <div class="result-banner" id="result-banner">
+    <div class="result-title">Pentest Result</div>
+    <div class="result-action" id="result-action"></div>
+    <div class="result-explain" id="result-explain"></div>
+    <div class="result-meta" id="result-meta"></div>
+  </div>
+
+  <!-- ── Exploitation Guide ──────────────────────────────────────── -->
+  <div class="guide-banner" id="guide-banner">
+    <div class="guide-banner-head">
+      <span class="guide-banner-icon">&#x2620;</span>
+      <div>
+        <div class="guide-banner-title" id="guide-title">취약점 발견 — 공격 성공</div>
+        <div class="guide-banner-sub" id="guide-sub">아래 가이드를 따라 해킹된 시스템에 직접 접근해보세요</div>
+      </div>
+      <button class="guide-open-btn" id="guide-open-btn" onclick="openTarget()">사이트 열기 &#x2197;</button>
+    </div>
+    <div class="guide-body" id="guide-body"></div>
+  </div>
+
+  <!-- ── Recon Results ───────────────────────────────────────────── -->
+  <div id="sec-recon" class="section">
+    <div class="section-head">Reconnaissance</div>
+    <div class="section-body" id="body-recon"></div>
+  </div>
+
+  <!-- ── Knowledge Retrieval ─────────────────────────────────────── -->
+  <div id="sec-retrieve" class="section">
+    <div class="section-head">Knowledge Retrieval</div>
+    <div class="section-body" id="body-retrieve"></div>
+  </div>
+
+  <!-- ── Generated Payload ───────────────────────────────────────── -->
+  <div id="sec-payload" class="section">
+    <div class="section-head">Generated Payload</div>
+    <div class="section-body" id="body-payload"></div>
+  </div>
+
+  <!-- ── Exploit Result ──────────────────────────────────────────── -->
+  <div id="sec-exploit" class="section">
+    <div class="section-head">Exploit Result</div>
+    <div class="section-body" id="body-exploit"></div>
+  </div>
+
+  <!-- ── Final Report ────────────────────────────────────────────── -->
+  <div id="sec-report" class="section">
+    <div class="section-head">Final Report</div>
+    <div class="section-body" id="body-report"></div>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   GLOBALS
+═══════════════════════════════════════════════════════════════════ */
+var analysisRunning = false;
+var stepTimers = {};
+var startedAt = null;
+var elapsedInterval = null;
+var currentAttempt = 0;
+var guideTargetUrl = '';
+
+var STEP_LABELS = [
+  'Reconnaissance',
+  'Knowledge Retrieval',
+  'Payload Generation',
+  'Attack Execution',
+  'Report Generation'
+];
+
+var STEP_WEIGHTS = [10, 20, 20, 20, 30]; // weights for overall progress
+
+/* ═══════════════════════════════════════════════════════════════════
+   THEME
+═══════════════════════════════════════════════════════════════════ */
+function toggleTheme() {
+  var t = document.documentElement.getAttribute('data-theme');
+  var isLight = (t === 'light');
+  document.documentElement.setAttribute('data-theme', isLight ? '' : 'light');
+  document.getElementById('theme-btn').innerHTML = isLight ? '&#9788;' : '&#9789;';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════════ */
+function escapeHtml(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.appendChild(document.createTextNode(String(s)));
+  return d.innerHTML;
+}
+
+function fmtElapsed(sec) {
+  if (sec < 0.1) return '<0.1s';
+  if (sec < 60) return sec.toFixed(1) + 's';
+  return Math.floor(sec / 60) + 'm ' + Math.floor(sec % 60) + 's';
+}
+
+function fmt24h(date) {
+  var h = date.getHours(), m = date.getMinutes(), s = date.getSeconds();
+  return (h<10?'0':'')+h+':'+(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+}
+
+/* Simple markdown → HTML (subset) */
+function markdownToHtml(md) {
+  if (!md) return '';
+  var html = escapeHtml(md);
+  // headings
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  // bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // italic / emphasis
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // hr
+  html = html.replace(/^---$/gm, '<hr>');
+  // bullet lists
+  html = html.replace(/^(\s*[-*+] .+)(\n\s*[-*+] .+)*/gm, function(block) {
+    var items = block.split('\n').filter(function(l){return l.trim();});
+    return '<ul>' + items.map(function(l){
+      return '<li>' + l.replace(/^\s*[-*+] /, '') + '</li>';
+    }).join('') + '</ul>';
+  });
+  // numbered lists
+  html = html.replace(/^(\s*\d+\. .+)(\n\s*\d+\. .+)*/gm, function(block) {
+    var items = block.split('\n').filter(function(l){return l.trim();});
+    return '<ol>' + items.map(function(l){
+      return '<li>' + l.replace(/^\s*\d+\. /, '') + '</li>';
+    }).join('') + '</ol>';
+  });
+  // paragraphs — split on double newlines
+  var parts = html.split(/\n{2,}/);
+  html = parts.map(function(p) {
+    p = p.trim();
+    if (!p) return '';
+    if (/^<(h[23]|ul|ol|hr)/.test(p)) return p;
+    return '<p>' + p.replace(/\n/g, '<br>') + '</p>';
+  }).join('');
+  return html;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESET UI
+═══════════════════════════════════════════════════════════════════ */
+function resetUI() {
+  document.getElementById('pipeline').style.display = 'none';
+  document.getElementById('pl-steps').innerHTML = '';
+  document.getElementById('prog-overall').style.width = '0%';
+  document.getElementById('prog-pct').textContent = '0%';
+  document.getElementById('ts-bar').style.display = 'none';
+
+  var banner = document.getElementById('result-banner');
+  banner.style.display = 'none';
+  banner.className = 'result-banner';
+
+  document.getElementById('guide-banner').style.display = 'none';
+  document.getElementById('guide-body').innerHTML = '';
+  guideTargetUrl = '';
+
+  ['sec-recon','sec-retrieve','sec-payload','sec-exploit','sec-report'].forEach(function(id) {
+    document.getElementById(id).style.display = 'none';
+  });
+  ['body-recon','body-retrieve','body-payload','body-exploit','body-report'].forEach(function(id) {
+    document.getElementById(id).innerHTML = '';
+  });
+
+  Object.keys(stepTimers).forEach(function(k) {
+    if (stepTimers[k]) clearInterval(stepTimers[k]);
+  });
+  stepTimers = {};
+  currentAttempt = 0;
+
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   START ANALYSIS
+═══════════════════════════════════════════════════════════════════ */
+function startAnalysis() {
+  var url = document.getElementById('target-url').value.trim();
+  if (!url || analysisRunning) return;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'http://' + url;
+    document.getElementById('target-url').value = url;
+  }
+
+  analysisRunning = true;
+  document.getElementById('btn-analyze').disabled = true;
+  resetUI();
+
+  startedAt = new Date();
+  var tsBar = document.getElementById('ts-bar');
+  tsBar.style.display = 'flex';
+  tsBar.classList.remove('finished');
+  document.getElementById('ts-start').textContent = 'Started: ' + fmt24h(startedAt);
+  document.getElementById('ts-elapsed').textContent = 'Elapsed: 0s';
+  document.getElementById('ts-finish').textContent = '';
+  elapsedInterval = setInterval(function() {
+    var elapsed = (Date.now() - startedAt.getTime()) / 1000;
+    document.getElementById('ts-elapsed').textContent = 'Elapsed: ' + fmtElapsed(elapsed);
+  }, 500);
+
+  fetch('/api/analyze', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({target_url: url})
+  }).then(function(response) {
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = '';
+
+    function read() {
+      reader.read().then(function(result) {
+        if (result.done) { finishAnalysis(); return; }
+        buffer += decoder.decode(result.value, {stream: true});
+        var lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        var eventType = '', dataStr = '';
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (line.indexOf('event: ') === 0) {
+            eventType = line.substring(7).trim();
+          } else if (line.indexOf('data: ') === 0) {
+            dataStr = line.substring(6);
+            if (eventType && dataStr) {
+              try {
+                handleEvent(eventType, JSON.parse(dataStr));
+              } catch(e) {
+                console.error('[HM] Parse error:', e, dataStr.substring(0, 100));
+              }
+            }
+            eventType = ''; dataStr = '';
+          }
+        }
+        read();
+      }).catch(function(err) {
+        console.error('Stream error:', err);
+        finishAnalysis();
+      });
+    }
+    read();
+  }).catch(function(err) {
+    console.error('Fetch error:', err);
+    alert('연결 오류: ' + err.message);
+    finishAnalysis();
+  });
+}
+
+function finishAnalysis() {
+  analysisRunning = false;
+  document.getElementById('btn-analyze').disabled = false;
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+  Object.keys(stepTimers).forEach(function(k) {
+    if (stepTimers[k]) clearInterval(stepTimers[k]);
+  });
+  var now = new Date();
+  if (startedAt) {
+    document.getElementById('ts-elapsed').textContent = 'Elapsed: ' + fmtElapsed((now - startedAt) / 1000);
+  }
+  document.getElementById('ts-finish').textContent = 'Finished: ' + fmt24h(now);
+  document.getElementById('ts-bar').classList.add('finished');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EVENT HANDLER
+═══════════════════════════════════════════════════════════════════ */
+function handleEvent(type, data) {
+  if (type === 'pipeline_init') initPipeline(data);
+  else if (type === 'step_update') updateStep(data);
+  else if (type === 'stage') handleStage(data.stage, data.data);
+  else if (type === 'done') { renderResult(data); finishAnalysis(); }
+  else if (type === 'error') {
+    alert('오류 발생: ' + (data.message || '알 수 없는 오류'));
+    finishAnalysis();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PIPELINE
+═══════════════════════════════════════════════════════════════════ */
+function initPipeline(data) {
+  document.getElementById('pipeline').style.display = 'block';
+  var container = document.getElementById('pl-steps');
+  container.innerHTML = '';
+
+  STEP_LABELS.forEach(function(label, i) {
+    var div = document.createElement('div');
+    div.className = 'pl-step pending';
+    div.id = 'step-' + i;
+    div.innerHTML = '<span class="pl-label">' + escapeHtml(label) + '</span>'
+      + '<span class="pl-elapsed" id="step-el-' + i + '"></span>';
+    container.appendChild(div);
+  });
+}
+
+function updateStep(data) {
+  var idx = data.index;
+  var el = document.getElementById('step-' + idx);
+  if (!el) return;
+
+  el.className = 'pl-step ' + data.status;
+  var elEl = document.getElementById('step-el-' + idx);
+
+  if (data.status === 'running') {
+    var start = Date.now();
+    stepTimers[idx] = setInterval(function() {
+      elEl.textContent = fmtElapsed((Date.now() - start) / 1000);
+    }, 500);
+    updateProgress(idx);
+  } else if (data.status === 'complete') {
+    if (stepTimers[idx]) { clearInterval(stepTimers[idx]); delete stepTimers[idx]; }
+    updateProgress(idx + 1);
+  }
+}
+
+function updateProgress(completedSteps) {
+  var total = STEP_WEIGHTS.reduce(function(a, b) { return a + b; }, 0);
+  var done = 0;
+  for (var i = 0; i < completedSteps && i < STEP_WEIGHTS.length; i++) {
+    done += STEP_WEIGHTS[i];
+  }
+  var pct = Math.min(Math.round(done / total * 100), 100);
+  document.getElementById('prog-overall').style.width = pct + '%';
+  document.getElementById('prog-pct').textContent = pct + '%';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STAGE RENDERERS
+═══════════════════════════════════════════════════════════════════ */
+function handleStage(stage, data) {
+  if (stage === 'recon_result') renderRecon(data);
+  else if (stage === 'retrieve_result') renderRetrieve(data);
+  else if (stage === 'generate_result') renderPayload(data);
+  else if (stage === 'exploit_result') renderExploit(data);
+  else if (stage === 'report_result') renderReport(data);
+}
+
+function renderRecon(d) {
+  var sec = document.getElementById('sec-recon');
+  var body = document.getElementById('body-recon');
+  sec.style.display = 'block';
+  body.innerHTML =
+    row('Target IP', d.ip || 'Unknown') +
+    row('Server', d.server || 'Unknown') +
+    row('Detected Tech', d.tech || 'Unknown');
+}
+
+function renderRetrieve(d) {
+  var sec = document.getElementById('sec-retrieve');
+  var body = document.getElementById('body-retrieve');
+  sec.style.display = 'block';
+  var docText = d.doc_count > 0
+    ? '<span class="badge success">' + d.doc_count + ' docs found</span>'
+    : '<span class="badge warn">No docs found</span>';
+  body.innerHTML =
+    '<div class="row"><span class="row-label">Knowledge Docs</span><span class="row-value plain">' + docText + '</span></div>' +
+    row('Context Size', d.context_length + ' chars');
+}
+
+function renderPayload(d) {
+  var sec = document.getElementById('sec-payload');
+  var body = document.getElementById('body-payload');
+  sec.style.display = 'block';
+
+  currentAttempt = d.attempt || 1;
+
+  var attemptBadge = '<span class="attempt-badge">Attempt #' + currentAttempt + '</span>';
+  var postDataStr = (d.post_data && Object.keys(d.post_data).length > 0)
+    ? JSON.stringify(d.post_data, null, 2)
+    : 'None';
+
+  var html = '<div class="sub-label" style="margin-top:0">Attack Request ' + attemptBadge + '</div>';
+  html += row('Method', d.method || 'GET');
+  html += '<div class="row"><span class="row-label" style="flex-shrink:0;min-width:80px;">URL</span><span class="row-value">' + escapeHtml(d.url) + '</span></div>';
+  if (postDataStr !== 'None') {
+    html += '<div class="sub-label">POST Data</div>';
+    html += '<div class="code-block">' + escapeHtml(postDataStr) + '</div>';
+  }
+  if (d.explanation) {
+    html += '<div class="sub-label">AI Reasoning</div>';
+    html += '<p style="font-size:14.5px;color:var(--text-muted);line-height:1.7;">' + escapeHtml(d.explanation) + '</p>';
+  }
+  body.innerHTML = html;
+}
+
+function renderExploit(d) {
+  var sec = document.getElementById('sec-exploit');
+  var body = document.getElementById('body-exploit');
+  sec.style.display = 'block';
+
+  var statusBadge = d.is_success
+    ? '<span class="badge success">SUCCESS</span>'
+    : '<span class="badge failed">FAILED</span>';
+  var codeText = d.status_code != null ? String(d.status_code) : 'N/A';
+
+  var html = '';
+  html += '<div class="row"><span class="row-label">Result</span><span class="row-value plain">' + statusBadge + '</span></div>';
+  html += row('Attempt', '#' + (d.attempt || 1));
+  html += row('HTTP Status', codeText);
+  if (d.feedback) html += row('Feedback', d.feedback);
+  if (d.indicators_found && d.indicators_found.length > 0) {
+    html += '<div class="sub-label">Success Indicators Found</div>';
+    html += '<div>' + d.indicators_found.map(function(ind) {
+      return '<span class="indicator-tag">' + escapeHtml(ind) + '</span>';
+    }).join('') + '</div>';
+  }
+  if (d.captured_email) html += row('Compromised Account', d.captured_email);
+  if (d.captured_role)  html += row('Role', d.captured_role);
+  body.innerHTML = html;
+
+  // 공격 성공 시 Exploitation Guide 표시
+  if (d.is_success) renderGuide(d);
+}
+
+function renderGuide(d) {
+  var banner = document.getElementById('guide-banner');
+  var body   = document.getElementById('guide-body');
+  banner.style.display = 'block';
+  guideTargetUrl = d.target_url || '';
+
+  // 공격 유형 추론
+  var attackType = 'SQL Injection';
+  var exp = (d.attack_data && JSON.stringify(d.attack_data)) || '';
+  if (exp.toLowerCase().indexOf('xss') !== -1 || exp.indexOf('<script') !== -1) attackType = 'XSS';
+  else if (d.attack_url && d.attack_url.indexOf('Users') !== -1) attackType = 'IDOR';
+
+  document.getElementById('guide-title').textContent = attackType + ' 공격 성공 — 시스템 침투 완료';
+
+  var html = '';
+
+  // JWT 토큰 표시
+  if (d.jwt_token) {
+    html += '<div class="token-box">';
+    html += '<div class="token-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--red);margin-bottom:8px;display:flex;align-items:center;gap:8px;">&#128274; 탈취된 JWT 토큰 <button class="copy-btn" onclick="copyToken()">복사</button></div>';
+    html += '<div class="token-val" id="jwt-token-val">' + escapeHtml(d.jwt_token) + '</div>';
+    html += '</div>';
+  }
+
+  // Step-by-step 가이드
+  var baseUrl = (d.target_url || '').split('#')[0].replace(/\/$/, '');
+  var steps = buildGuideSteps(attackType, baseUrl, d);
+  html += '<div class="sub-label" style="margin-top:0;">단계별 접근 가이드</div>';
+  html += '<div class="guide-steps">';
+  steps.forEach(function(s, i) {
+    html += '<div class="guide-step">';
+    html += '<div class="guide-step-num">' + (i + 1) + '</div>';
+    html += '<div class="guide-step-content">';
+    html += '<div class="guide-step-title">' + escapeHtml(s.title) + '</div>';
+    html += '<div class="guide-step-desc">' + escapeHtml(s.desc) + '</div>';
+    if (s.code) html += '<div class="guide-step-code">' + escapeHtml(s.code) + '</div>';
+    html += '</div></div>';
+  });
+  html += '</div>';
+
+  // 공격자가 할 수 있는 것
+  var impacts = buildImpacts(attackType);
+  html += '<div class="sub-label">공격자가 할 수 있는 것</div>';
+  html += '<div class="impact-list">';
+  impacts.forEach(function(imp) {
+    html += '<div class="impact-item"><span class="impact-icon">' + imp.icon + '</span>' + escapeHtml(imp.text) + '</div>';
+  });
+  html += '</div>';
+
+  // curl 재현 명령어
+  html += '<div class="sub-label">공격 재현 명령어 (curl)</div>';
+  var curlCmd = buildCurl(d);
+  html += '<div style="position:relative;">';
+  html += '<div class="code-block" id="curl-cmd">' + escapeHtml(curlCmd) + '</div>';
+  html += '<button class="copy-btn" style="position:absolute;top:8px;right:8px;" onclick="copyCurl()">복사</button>';
+  html += '</div>';
+
+  body.innerHTML = html;
+}
+
+function buildGuideSteps(attackType, baseUrl, d) {
+  if (attackType === 'SQL Injection') {
+    return [
+      {
+        title: '사이트 열기',
+        desc: '아래 버튼을 눌러 대상 사이트를 새 탭에서 엽니다.',
+        code: baseUrl
+      },
+      {
+        title: '관리자 패널 접근',
+        desc: 'URL 창에 아래 경로를 직접 입력하세요.',
+        code: baseUrl + '/#/administration'
+      },
+      {
+        title: 'JWT 토큰으로 API 인증',
+        desc: '브라우저 개발자도구 → Application → Local Storage → "token" 값에 탈취한 토큰을 붙여넣기 하거나, Authorization 헤더로 직접 API를 호출할 수 있습니다.',
+        code: d.jwt_token ? 'Authorization: Bearer ' + d.jwt_token.substring(0, 40) + '...' : ''
+      },
+      {
+        title: '전체 사용자 목록 조회',
+        desc: 'API로 모든 사용자 정보를 열람할 수 있습니다.',
+        code: 'GET ' + baseUrl + '/api/Users/'
+      }
+    ];
+  } else if (attackType === 'IDOR') {
+    return [
+      {title: '사이트 열기', desc: '대상 사이트를 새 탭으로 엽니다.', code: baseUrl},
+      {title: 'IDOR 취약 엔드포인트 접근', desc: '직접 URL로 다른 사용자 정보를 조회합니다.', code: d.attack_url},
+      {title: 'ID 값 변경하며 탐색', desc: 'URL 끝의 숫자를 1, 2, 3으로 바꾸며 다른 유저 데이터를 열람합니다.', code: ''}
+    ];
+  } else {
+    return [
+      {title: '사이트 열기', desc: '대상 사이트를 새 탭으로 엽니다.', code: baseUrl},
+      {title: 'XSS 취약 페이지 확인', desc: '페이로드가 실행된 페이지에서 alert 팝업이 뜨는지 확인합니다.', code: d.attack_url}
+    ];
+  }
+}
+
+function buildImpacts(attackType) {
+  if (attackType === 'SQL Injection') {
+    return [
+      {icon: '&#128272;', text: '관리자 계정 무단 로그인 — 비밀번호 없이 접근 가능'},
+      {icon: '&#128065;', text: '전체 사용자 개인정보 열람 (이메일, 비밀번호 해시, 주소)'},
+      {icon: '&#128230;', text: '모든 주문 내역 및 결제 정보 접근'},
+      {icon: '&#9881;', text: '관리자 패널에서 상품 추가/삭제/수정 가능'},
+      {icon: '&#128193;', text: '숨겨진 상품 및 개발자 정보 열람'},
+    ];
+  } else if (attackType === 'IDOR') {
+    return [
+      {icon: '&#128065;', text: '다른 사용자의 개인정보 무단 열람'},
+      {icon: '&#9999;', text: '다른 사용자의 주문 수정 또는 삭제'},
+    ];
+  } else {
+    return [
+      {icon: '&#128125;', text: '사용자 브라우저에서 임의 스크립트 실행'},
+      {icon: '&#128272;', text: '세션 쿠키 탈취로 계정 탈취 가능'},
+    ];
+  }
+}
+
+function buildCurl(d) {
+  if (d.attack_method === 'POST' && d.attack_data && Object.keys(d.attack_data).length > 0) {
+    return 'curl -X POST "' + d.attack_url + '" \\\n'
+      + '  -H "Content-Type: application/json" \\\n'
+      + '  -d \'' + JSON.stringify(d.attack_data) + '\'';
+  }
+  return 'curl "' + d.attack_url + '"';
+}
+
+function copyToken() {
+  var el = document.getElementById('jwt-token-val');
+  if (el) navigator.clipboard.writeText(el.textContent);
+}
+
+function copyCurl() {
+  var el = document.getElementById('curl-cmd');
+  if (el) navigator.clipboard.writeText(el.textContent);
+}
+
+function openTarget() {
+  if (guideTargetUrl) window.open(guideTargetUrl, '_blank');
+}
+
+function renderReport(d) {
+  var sec = document.getElementById('sec-report');
+  var body = document.getElementById('body-report');
+  sec.style.display = 'block';
+  body.innerHTML = '<div class="report-body">' + markdownToHtml(d.report) + '</div>';
+}
+
+function renderResult(d) {
+  var banner = document.getElementById('result-banner');
+  var decision = d.is_success ? 'SUCCESS' : 'FAILED';
+  banner.className = 'result-banner ' + decision;
+  banner.style.display = 'block';
+
+  document.getElementById('result-action').textContent = decision;
+  document.getElementById('result-explain').textContent = d.is_success
+    ? '공격 성공: 대상 시스템에서 취약점이 발견되었습니다.'
+    : '공격 실패: 현재 페이로드로는 취약점을 확인할 수 없습니다.';
+  document.getElementById('result-meta').textContent =
+    '시도 횟수: ' + d.attempts + '회  |  대상: ' + d.target_url +
+    '  |  IP: ' + (d.ip || 'Unknown');
+}
+
+/* ── Row helper ───────────────────────────────────────────────────── */
+function row(label, value) {
+  return '<div class="row"><span class="row-label">' + escapeHtml(label) + '</span>'
+    + '<span class="row-value">' + escapeHtml(String(value)) + '</span></div>';
+}
+</script>
+</body>
+</html>

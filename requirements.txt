@@ -1,0 +1,14 @@
+langchain-chroma
+langchain-huggingface
+langchain-ollama
+langchain-core
+langgraph
+requests
+urllib3
+sentence-transformers
+fastapi
+uvicorn[standard]
+langchain
+langchain-community
+flashrank
+deep-translator

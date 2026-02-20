@@ -1,0 +1,35 @@
+# --- Python 기본 ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- 가상환경 (Virtual Environments) ---
+# 사용 중인 가상환경 폴더 이름이 다를 경우 여기에 추가하세요
+venv/
+.venv/
+env/
+.env_sec/
+
+# --- 환경변수 및 비밀키 (보안 필수) ---
+# API Key 등이 들어있는 파일은 절대 올리면 안 됩니다.
+.env
+.env.local
+*.key
+
+# --- 데이터베이스 (ChromaDB) ---
+# 스크린샷에 있는 벡터 DB 폴더입니다. 용량이 크고 바이너리 파일이라 제외합니다.
+chroma_data/
+*.sqlite3
+
+# --- 데이터 파일 ---
+# data 폴더 안에 민감한 정보나 대용량 파일이 있다면 주석(#)을 제거하세요.
+# data/
+
+# --- IDE 설정 (VS Code, JetBrains 등) ---
+.vscode/
+.idea/
+
+# --- macOS 시스템 파일 ---
+.DS_Store
+
+hackymocchi/data/hackymocchi_vector_data_optimized.json
