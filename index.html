@@ -317,7 +317,11 @@ a:hover{text-decoration:underline;}
   display:flex;align-items:center;gap:12px;
   border-bottom:1px solid rgba(240,82,82,.3);
 }
-.guide-banner-icon{font-size:1.6rem;line-height:1;}
+.guide-banner-tag{
+  font-family:var(--font-mono);font-size:11px;font-weight:var(--fw-bold);
+  letter-spacing:1.5px;color:var(--red);border:1px solid var(--red);
+  padding:3px 8px;border-radius:3px;flex-shrink:0;line-height:1.4;
+}
 .guide-banner-title{
   font-size:1.1rem;font-weight:var(--fw-bold);color:var(--red);letter-spacing:.5px;
 }
@@ -383,7 +387,7 @@ a:hover{text-decoration:underline;}
   border:1px solid rgba(240,82,82,.2);border-radius:var(--radius);
   font-size:14px;color:var(--text);
 }
-.impact-icon{font-size:1rem;flex-shrink:0;}
+.impact-icon{font-size:14px;flex-shrink:0;color:var(--red);font-weight:700;font-family:var(--font-mono);}
 
 /* ── Responsive ──────────────────────────────────────────────────── */
 @media(max-width:600px){
@@ -414,8 +418,93 @@ a:hover{text-decoration:underline;}
       autocomplete="off"
       spellcheck="false"
     />
+
+    <!-- 고급 옵션: 세션 쿠키 + 커스텀 헤더 -->
+    <div style="margin-top:10px;">
+      <button
+        onclick="toggleAdvanced()"
+        id="adv-toggle-btn"
+        style="background:none;border:1px solid var(--border);color:var(--text-muted);
+               padding:4px 12px;border-radius:6px;cursor:pointer;font-size:13px;">
+        Options
+      </button>
+    </div>
+    <div id="adv-panel" style="display:none;margin-top:10px;padding:14px;
+         background:var(--bg-input);border:1px solid var(--border);border-radius:8px;">
+
+      <!-- 자동 로그인 섹션 -->
+      <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+        <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:8px;letter-spacing:.3px;">
+          Auto Login
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:6px;">
+          <div style="flex:1;">
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">Username / Email</label>
+            <input
+              id="login-username"
+              style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);
+                     border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;"
+              type="text"
+              placeholder="your_username"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">Password</label>
+            <input
+              id="login-password"
+              style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);
+                     border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;"
+              type="password"
+              placeholder="your_password"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);">
+          입력한 계정으로 자동 로그인 후 세션 쿠키를 획득합니다. 쿠키 만료 문제가 없습니다.
+        </div>
+      </div>
+
+      <!-- 수동 쿠키 섹션 -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:8px;letter-spacing:.3px;">
+          Manual Session Cookie
+        </div>
+        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">
+          Session Cookie
+          <span style="color:var(--text-dim);font-weight:400;">(F12 → Application → Cookies)</span>
+        </label>
+        <input
+          id="session-cookie"
+          style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);
+                 border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;"
+          type="text"
+          placeholder="HackThisSite=abc123; session=xyz"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">
+          Custom Headers
+          <span style="color:var(--text-dim);font-weight:400;">(JSON 형식)</span>
+        </label>
+        <input
+          id="custom-headers"
+          style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);
+                 border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;"
+          type="text"
+          placeholder='{"Authorization":"Bearer TOKEN"}'
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+    </div>
+
     <div class="controls">
-      <span class="hint-text">⚠️ 반드시 허가된 시스템에서만 사용하세요</span>
+      <span class="hint-text">허가된 시스템에서만 사용하세요</span>
       <button id="btn-analyze" class="analyze-btn" onclick="startAnalysis()">Analyze</button>
     </div>
   </div>
@@ -453,12 +542,12 @@ a:hover{text-decoration:underline;}
   <!-- ── Exploitation Guide ──────────────────────────────────────── -->
   <div class="guide-banner" id="guide-banner">
     <div class="guide-banner-head">
-      <span class="guide-banner-icon">&#x2620;</span>
+      <div class="guide-banner-tag">VULN</div>
       <div>
-        <div class="guide-banner-title" id="guide-title">취약점 발견 — 공격 성공</div>
-        <div class="guide-banner-sub" id="guide-sub">아래 가이드를 따라 해킹된 시스템에 직접 접근해보세요</div>
+        <div class="guide-banner-title" id="guide-title">취약점 발견</div>
+        <div class="guide-banner-sub" id="guide-sub">발견된 취약점을 직접 재현하는 방법을 단계별로 설명합니다</div>
       </div>
-      <button class="guide-open-btn" id="guide-open-btn" onclick="openTarget()">사이트 열기 &#x2197;</button>
+      <button class="guide-open-btn" id="guide-open-btn" onclick="openTarget()">사이트 열기 &nearr;</button>
     </div>
     <div class="guide-body" id="guide-body"></div>
   </div>
@@ -624,12 +713,31 @@ function resetUI() {
 /* ═══════════════════════════════════════════════════════════════════
    START ANALYSIS
 ═══════════════════════════════════════════════════════════════════ */
+function toggleAdvanced() {
+  var panel = document.getElementById('adv-panel');
+  var btn = document.getElementById('adv-toggle-btn');
+  var isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  btn.style.borderColor = isHidden ? 'var(--accent)' : 'var(--border)';
+  btn.style.color = isHidden ? 'var(--accent)' : 'var(--text-muted)';
+}
+
 function startAnalysis() {
   var url = document.getElementById('target-url').value.trim();
   if (!url || analysisRunning) return;
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'http://' + url;
     document.getElementById('target-url').value = url;
+  }
+
+  // 자동 로그인 / 세션 쿠키 / 커스텀 헤더 수집
+  var loginUsername = (document.getElementById('login-username').value || '').trim();
+  var loginPassword = (document.getElementById('login-password').value || '').trim();
+  var sessionCookie = (document.getElementById('session-cookie').value || '').trim();
+  var customHeadersRaw = (document.getElementById('custom-headers').value || '').trim();
+  var customHeaders = {};
+  if (customHeadersRaw) {
+    try { customHeaders = JSON.parse(customHeadersRaw); } catch(e) {}
   }
 
   analysisRunning = true;
@@ -651,7 +759,13 @@ function startAnalysis() {
   fetch('/api/analyze', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({target_url: url})
+    body: JSON.stringify({
+      target_url: url,
+      session_cookie: sessionCookie || null,
+      custom_headers: Object.keys(customHeaders).length > 0 ? customHeaders : null,
+      username: loginUsername || null,
+      password: loginPassword || null
+    })
   }).then(function(response) {
     var reader = response.body.getReader();
     var decoder = new TextDecoder();
@@ -777,11 +891,37 @@ function updateProgress(completedSteps) {
    STAGE RENDERERS
 ═══════════════════════════════════════════════════════════════════ */
 function handleStage(stage, data) {
-  if (stage === 'recon_result') renderRecon(data);
+  if (stage === 'login_result') renderLogin(data);
+  else if (stage === 'recon_result') renderRecon(data);
   else if (stage === 'retrieve_result') renderRetrieve(data);
   else if (stage === 'generate_result') renderPayload(data);
   else if (stage === 'exploit_result') renderExploit(data);
   else if (stage === 'report_result') renderReport(data);
+}
+
+function renderLogin(d) {
+  // 파이프라인 스텝 라벨 중 "Login" 스텝 아래에 결과 표시
+  var loginStep = document.querySelector('.step-label');
+  // login_result 전용 배너를 pipeline 위에 삽입
+  var banner = document.getElementById('login-result-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'login-result-banner';
+    banner.style.cssText = 'margin:10px 0;padding:10px 14px;border-radius:8px;font-size:13px;font-family:var(--font-mono);';
+    var pipeline = document.getElementById('pipeline');
+    if (pipeline) pipeline.parentNode.insertBefore(banner, pipeline);
+  }
+  if (d.success) {
+    banner.style.background = 'rgba(80,200,120,0.12)';
+    banner.style.border = '1px solid rgba(80,200,120,0.4)';
+    banner.style.color = '#50c878';
+    banner.innerHTML = '<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:1px;margin-right:10px;border:1px solid currentColor;padding:2px 6px;border-radius:2px;">LOGIN OK</span>' + (d.message || '세션 쿠키 획득 완료').replace('로그인 성공 ✅ 쿠키 획득: ', '').split(';')[0];
+  } else {
+    banner.style.background = 'rgba(255,100,100,0.10)';
+    banner.style.border = '1px solid rgba(255,100,100,0.3)';
+    banner.style.color = '#ff6464';
+    banner.innerHTML = '<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:1px;margin-right:10px;border:1px solid currentColor;padding:2px 6px;border-radius:2px;">LOGIN FAIL</span>' + (d.message || '아이디/비밀번호를 확인하세요');
+  }
 }
 
 function renderRecon(d) {
@@ -855,6 +995,23 @@ function renderExploit(d) {
   }
   if (d.captured_email) html += row('Compromised Account', d.captured_email);
   if (d.captured_role)  html += row('Role', d.captured_role);
+
+  // JWT 토큰 — Exploit 섹션에 직접 표시 (복사 버튼 포함)
+  if (d.jwt_token) {
+    html += '<div class="sub-label">탈취된 JWT 토큰</div>';
+    html += '<div style="position:relative;">';
+    html += '<div class="code-block" id="exploit-jwt-val" style="font-size:11px;word-break:break-all;padding-right:60px;">' + escapeHtml(d.jwt_token) + '</div>';
+    html += '<button class="copy-btn" style="position:absolute;top:8px;right:8px;" onclick="copyExploitJwt()">복사</button>';
+    html += '</div>';
+    html += '<div class="helper-text" style="margin-top:6px;font-size:13px;color:var(--yellow);">';
+    html += '→ F12 콘솔에서 아래 명령 실행 후 새로고침하면 관리자로 로그인됩니다';
+    html += '</div>';
+    html += '<div class="code-block" id="exploit-ls-cmd" style="font-size:12px;margin-top:4px;position:relative;padding-right:60px;">';
+    html += escapeHtml('localStorage.setItem("token", "' + d.jwt_token + '")');
+    html += '<button class="copy-btn" style="position:absolute;top:8px;right:8px;" onclick="copyLsCmd()">복사</button>';
+    html += '</div>';
+  }
+
   body.innerHTML = html;
 
   // 공격 성공 시 Exploitation Guide 표시
@@ -867,43 +1024,83 @@ function renderGuide(d) {
   banner.style.display = 'block';
   guideTargetUrl = d.target_url || '';
 
-  // 공격 유형 추론
-  var attackType = 'SQL Injection';
-  var exp = (d.attack_data && JSON.stringify(d.attack_data)) || '';
-  if (exp.toLowerCase().indexOf('xss') !== -1 || exp.indexOf('<script') !== -1) attackType = 'XSS';
-  else if (d.attack_url && d.attack_url.indexOf('Users') !== -1) attackType = 'IDOR';
+  // 공격 유형 판별
+  // 1순위: jwt_token이 추출됨 → Auth Bypass (로그인 탈취)
+  // 2순위: POST 로그인 공격이고 'token'/'authentication' 지표 발견 → Auth Bypass (토큰 미추출)
+  // 3순위: 페이로드/URL로 XSS/LFI/IDOR 판별
+  var attackType;
+  var exp  = (d.attack_data && JSON.stringify(d.attack_data)) || '';
+  var url  = d.attack_url || '';
+  var inds = d.indicators_found || [];
+  var hasTokenIndicator = inds.indexOf('token') !== -1 || inds.indexOf('authentication') !== -1;
+  var isLoginPost = d.attack_method === 'POST' && (url.indexOf('login') !== -1 || url.indexOf('Login') !== -1);
 
-  document.getElementById('guide-title').textContent = attackType + ' 공격 성공 — 시스템 침투 완료';
+  if (d.jwt_token) {
+    attackType = 'Auth Bypass';
+  } else if (hasTokenIndicator && isLoginPost) {
+    attackType = 'Auth Bypass';
+  } else if (url.indexOf('robots.txt') !== -1 || url.indexOf('.htpasswd') !== -1 || url.indexOf('.env') !== -1) {
+    attackType = 'Recon';
+  } else if (url.indexOf('missions/basic') !== -1) {
+    attackType = 'CTF Mission';
+  } else if (exp.indexOf('<script') !== -1 || exp.indexOf('onerror') !== -1 || url.indexOf('search?q=') !== -1 || url.indexOf('search/?q=') !== -1) {
+    attackType = 'XSS';
+  } else if (url.indexOf('passwd') !== -1 || url.indexOf('../') !== -1 || url.indexOf('..%2F') !== -1) {
+    attackType = 'LFI';
+  } else if (url.indexOf('Users') !== -1 || url.indexOf('Feedbacks') !== -1) {
+    attackType = 'IDOR';
+  } else {
+    attackType = 'SQL Injection';
+  }
+
+  var titleMap = {
+    'Auth Bypass':   'SQLi Auth Bypass — JWT 토큰 획득',
+    'XSS':           'Reflected XSS — 스크립트 실행 확인',
+    'LFI':           'LFI / Path Traversal — 서버 파일 읽기',
+    'IDOR':          'IDOR — 비인가 데이터 접근',
+    'SQL Injection': 'SQL Injection — 취약점 확인',
+    'Recon':         'Information Disclosure — 민감 경로 노출',
+    'CTF Mission':   'Sensitive Data Exposure — 인증 정보 노출',
+  };
+  document.getElementById('guide-title').textContent = titleMap[attackType] || '취약점 확인됨';
+
+  var baseUrl = (d.target_url || '').split('#')[0].replace(/\/$/, '');
+  var subMap = {
+    'Auth Bypass':   '탈취한 JWT 토큰으로 관리자 계정에 직접 접근하는 방법입니다.',
+    'XSS':           'XSS 페이로드가 실행되는 URL에 접속하여 취약점을 재현합니다.',
+    'LFI':           '경로 탐색 취약점으로 서버 내부 파일을 읽는 과정입니다.',
+    'IDOR':          'ID 값 조작으로 타 사용자 데이터에 접근하는 과정입니다.',
+    'Recon':         '노출된 경로와 파일을 통해 다음 공격 벡터를 파악합니다.',
+    'CTF Mission':   '도구가 발견한 데이터를 기반으로 미션을 통과하는 과정입니다.',
+  };
+  document.getElementById('guide-sub').textContent = subMap[attackType] || '발견된 취약점을 재현하는 방법입니다.';
 
   var html = '';
 
-  // JWT 토큰 표시
-  if (d.jwt_token) {
-    html += '<div class="token-box">';
-    html += '<div class="token-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--red);margin-bottom:8px;display:flex;align-items:center;gap:8px;">&#128274; 탈취된 JWT 토큰 <button class="copy-btn" onclick="copyToken()">복사</button></div>';
-    html += '<div class="token-val" id="jwt-token-val">' + escapeHtml(d.jwt_token) + '</div>';
-    html += '</div>';
-  }
-
   // Step-by-step 가이드
-  var baseUrl = (d.target_url || '').split('#')[0].replace(/\/$/, '');
   var steps = buildGuideSteps(attackType, baseUrl, d);
-  html += '<div class="sub-label" style="margin-top:0;">단계별 접근 가이드</div>';
+  html += '<div class="sub-label" style="margin-top:0;">재현 방법</div>';
   html += '<div class="guide-steps">';
   steps.forEach(function(s, i) {
     html += '<div class="guide-step">';
     html += '<div class="guide-step-num">' + (i + 1) + '</div>';
     html += '<div class="guide-step-content">';
     html += '<div class="guide-step-title">' + escapeHtml(s.title) + '</div>';
-    html += '<div class="guide-step-desc">' + escapeHtml(s.desc) + '</div>';
-    if (s.code) html += '<div class="guide-step-code">' + escapeHtml(s.code) + '</div>';
+    html += '<div class="guide-step-desc" style="white-space:pre-line;">' + escapeHtml(s.desc) + '</div>';
+    if (s.code) {
+      html += '<div style="position:relative;">';
+      html += '<div class="guide-step-code" id="gstep-code-' + i + '">' + escapeHtml(s.code) + '</div>';
+      html += '<button class="copy-btn" style="position:absolute;top:6px;right:6px;" '
+            + 'onclick="copyStepCode(' + i + ')">복사</button>';
+      html += '</div>';
+    }
     html += '</div></div>';
   });
   html += '</div>';
 
   // 공격자가 할 수 있는 것
   var impacts = buildImpacts(attackType);
-  html += '<div class="sub-label">공격자가 할 수 있는 것</div>';
+  html += '<div class="sub-label">Impact</div>';
   html += '<div class="impact-list">';
   impacts.forEach(function(imp) {
     html += '<div class="impact-item"><span class="impact-icon">' + imp.icon + '</span>' + escapeHtml(imp.text) + '</div>';
@@ -911,7 +1108,7 @@ function renderGuide(d) {
   html += '</div>';
 
   // curl 재현 명령어
-  html += '<div class="sub-label">공격 재현 명령어 (curl)</div>';
+  html += '<div class="sub-label">Reproduce (curl)</div>';
   var curlCmd = buildCurl(d);
   html += '<div style="position:relative;">';
   html += '<div class="code-block" id="curl-cmd">' + escapeHtml(curlCmd) + '</div>';
@@ -922,61 +1119,288 @@ function renderGuide(d) {
 }
 
 function buildGuideSteps(attackType, baseUrl, d) {
-  if (attackType === 'SQL Injection') {
+  // ── Auth Bypass (JWT 토큰 탈취 후 브라우저 로그인) ─────────────────
+  if (attackType === 'Auth Bypass') {
+    var hasToken = !!d.jwt_token;
+    var lsCmd = hasToken
+      ? 'localStorage.setItem("token", "' + d.jwt_token + '")'
+      : null;
+
+    // 토큰 주입 단계 (jwt_token 있으면 바로 명령어, 없으면 curl로 확인 안내)
+    var tokenStep = hasToken
+      ? {
+          title: 'Console에 아래 명령어 붙여넣고 Enter',
+          desc: '아래 명령어를 복사한 뒤 Console 입력창에 붙여넣기(Ctrl+V)하고 Enter를 누르세요.\n실행 후 "undefined"가 출력되면 토큰 주입 성공입니다.',
+          code: lsCmd
+        }
+      : {
+          title: '응답에서 JWT 토큰 값을 직접 복사',
+          desc: '아래 curl 명령어를 터미널에서 실행하세요.\n응답 JSON에서 "token": "eyJ..." 부분의 값 전체를 복사합니다.\n그런 다음 Console에 아래 형식으로 입력하세요:',
+          code: 'localStorage.setItem("token", "여기에_응답의_token_값_붙여넣기")'
+        };
+
     return [
       {
-        title: '사이트 열기',
+        title: '대상 사이트 열기',
+        desc: '아래 버튼 또는 주소창에 대상 URL을 입력해 사이트를 새 탭에서 엽니다.',
+        code: baseUrl
+      },
+      {
+        title: '개발자 도구 열기 — F12',
+        desc: 'Chrome / Edge: F12 키, 또는 우클릭 → "검사(Inspect)"\nFirefox: F12 또는 Ctrl+Shift+I\n개발자 도구 패널이 화면 오른쪽 또는 아래에 나타납니다.',
+        code: ''
+      },
+      {
+        title: '"Console" 탭 클릭',
+        desc: '개발자 도구 상단 탭 목록에서 "Console"을 선택하세요.\n(Elements → Console → Sources → Network 순으로 있습니다)',
+        code: ''
+      },
+      tokenStep,
+      {
+        title: '페이지 새로고침 — F5',
+        desc: 'F5 또는 Ctrl+R을 눌러 페이지를 새로고침하세요.\n브라우저가 localStorage의 JWT 토큰을 읽어 관리자로 자동 인증합니다.',
+        code: ''
+      },
+      {
+        title: '관리자 패널 접근',
+        desc: '주소창에 아래 경로를 직접 입력하고 Enter를 누르세요.\n관리자 메뉴가 표시되면 침투 성공입니다.',
+        code: baseUrl + '/#/administration'
+      },
+      {
+        title: '전체 사용자 정보 열람',
+        desc: '아래 URL로 이동하면 가입된 모든 계정의\n이메일·비밀번호 해시·주소·결제 정보를 조회할 수 있습니다.',
+        code: 'GET ' + baseUrl + '/api/Users/'
+      }
+    ];
+
+  // ── XSS ───────────────────────────────────────────────────────────
+  } else if (attackType === 'XSS') {
+    return [
+      {
+        title: '대상 사이트 열기',
         desc: '아래 버튼을 눌러 대상 사이트를 새 탭에서 엽니다.',
         code: baseUrl
       },
       {
-        title: '관리자 패널 접근',
-        desc: 'URL 창에 아래 경로를 직접 입력하세요.',
-        code: baseUrl + '/#/administration'
+        title: 'XSS 취약 URL 접속',
+        desc: '아래 URL에 직접 접속하면 삽입된 스크립트가 브라우저에서 실행됩니다.\nalert 팝업이 뜨면 스크립트 실행 성공입니다.',
+        code: d.attack_url || ''
       },
       {
-        title: 'JWT 토큰으로 API 인증',
-        desc: '브라우저 개발자도구 → Application → Local Storage → "token" 값에 탈취한 토큰을 붙여넣기 하거나, Authorization 헤더로 직접 API를 호출할 수 있습니다.',
-        code: d.jwt_token ? 'Authorization: Bearer ' + d.jwt_token.substring(0, 40) + '...' : ''
-      },
-      {
-        title: '전체 사용자 목록 조회',
-        desc: 'API로 모든 사용자 정보를 열람할 수 있습니다.',
-        code: 'GET ' + baseUrl + '/api/Users/'
+        title: '세션 쿠키 탈취 확인',
+        desc: 'Console에서 아래 명령을 실행하면 피해자 쿠키(세션 ID 등)를 읽을 수 있습니다.',
+        code: 'console.log(document.cookie)'
       }
     ];
+
+  // ── LFI ───────────────────────────────────────────────────────────
+  } else if (attackType === 'LFI') {
+    return [
+      {
+        title: '취약 URL 직접 접속',
+        desc: '아래 URL에 접속하면 서버의 /etc/passwd 파일 내용이 응답으로 반환됩니다.',
+        code: d.attack_url || ''
+      },
+      {
+        title: '시스템 계정 정보 확인',
+        desc: '응답 본문에 "root:x:0:0:" 형태의 시스템 계정 목록이 표시되면\n경로 탈출(Path Traversal) 취약점이 실제로 존재하는 것입니다.',
+        code: ''
+      }
+    ];
+
+  // ── IDOR ──────────────────────────────────────────────────────────
   } else if (attackType === 'IDOR') {
     return [
-      {title: '사이트 열기', desc: '대상 사이트를 새 탭으로 엽니다.', code: baseUrl},
-      {title: 'IDOR 취약 엔드포인트 접근', desc: '직접 URL로 다른 사용자 정보를 조회합니다.', code: d.attack_url},
-      {title: 'ID 값 변경하며 탐색', desc: 'URL 끝의 숫자를 1, 2, 3으로 바꾸며 다른 유저 데이터를 열람합니다.', code: ''}
+      {
+        title: '대상 사이트 열기',
+        desc: '대상 사이트를 새 탭으로 엽니다.',
+        code: baseUrl
+      },
+      {
+        title: 'IDOR 취약 엔드포인트 접근',
+        desc: '아래 URL로 직접 접속하면 인증 없이 다른 사용자 데이터를 조회합니다.',
+        code: d.attack_url || ''
+      },
+      {
+        title: 'ID 값을 바꾸며 다른 계정 탐색',
+        desc: 'URL 끝의 숫자(1, 2, 3, ...)를 바꾸면 다른 사용자의 정보도 열람됩니다.',
+        code: ''
+      }
     ];
+
+  // ── Recon ─────────────────────────────────────────────────────────
+  } else if (attackType === 'Recon') {
+    var foundPaths = (d.indicators_found || []).filter(function(i) { return i.startsWith('/'); });
+    var pathsText = foundPaths.length > 0 ? foundPaths.join(', ') : '숨겨진 경로 포함 가능';
+    return [
+      {
+        title: '발견된 파일 직접 접근',
+        desc: '아래 URL로 직접 접속하면 노출된 파일/정보를 확인할 수 있습니다.',
+        code: d.attack_url || ''
+      },
+      {
+        title: '발견된 민감 경로 탐색',
+        desc: 'robots.txt에 노출된 Disallow 경로를 직접 방문하세요: ' + pathsText,
+        code: ''
+      },
+      {
+        title: '다음 공격 경로 설정',
+        desc: '발견된 경로(/admin, /private 등)를 대상으로 인증 우회 또는 접근 제어 취약점을 추가로 테스트하세요.',
+        code: ''
+      }
+    ];
+
+  // ── CTF Mission ───────────────────────────────────────────────────
+  } else if (attackType === 'CTF Mission') {
+    var indicators = d.indicators_found || [];
+    var attackBase = (d.attack_url || '').replace(/\/+$/, '');
+    var steps = [];
+
+    // hidden input 파싱
+    var hiddenInputs = indicators.filter(function(s) { return s.indexOf('[HIDDEN INPUT]') === 0; });
+    // JS 변수 파싱
+    var jsVars = indicators.filter(function(s) { return s.indexOf('[JS VAR]') === 0 || s.indexOf('[JS COMPARE]') === 0; });
+
+    if (hiddenInputs.length > 0) {
+      hiddenInputs.forEach(function(hint) {
+        var nameM = hint.match(/name=([^\s]+)/);
+        var valM  = hint.match(/value=([^\s]+)/);
+        var fieldName  = nameM  ? nameM[1]  : '';
+        var fieldValue = valM   ? valM[1]   : '';
+
+        if (fieldName === 'file' && fieldValue) {
+          // Mission 3 류 — 파일에 패스워드 저장
+          var fileUrl = attackBase + '/' + fieldValue;
+          steps.push({
+            title: '취약점 확인: 패스워드 파일 경로가 소스에 노출됨',
+            desc: '도구가 미션 페이지 소스에서 아래 hidden 필드를 발견했습니다.\n\n    <input type="hidden" name="' + fieldName + '" value="' + fieldValue + '">\n\n서버는 이메일 발송 대신 패스워드를 파일(' + fieldValue + ')에 저장해뒀고,\n그 파일명이 HTML에 그대로 노출되어 있습니다.',
+            code: null
+          });
+          steps.push({
+            title: '패스워드 파일 직접 접속',
+            desc: '아래 URL을 브라우저 주소창에 입력하고 Enter를 누르세요.\n서버가 해당 파일에 대한 접근 제어를 하지 않아 패스워드가 그대로 표시됩니다.',
+            code: fileUrl
+          });
+          steps.push({
+            title: '패스워드 복사 후 미션 폼에 제출',
+            desc: '파일에서 보이는 패스워드 문자열을 복사한 뒤,\n미션 페이지 Password 입력란에 붙여넣고 Submit 버튼을 클릭하세요.',
+            code: attackBase + '/'
+          });
+
+        } else if (fieldValue && fieldName.match(/^(pass|password|passwd|solution|answer|key)$/i)) {
+          // Mission 1 류 — hidden 필드에 패스워드 직접 삽입
+          steps.push({
+            title: '취약점 확인: 패스워드가 HTML에 평문 노출',
+            desc: '페이지 소스에 아래 hidden 필드가 있습니다.\n\n    <input type="hidden" name="' + fieldName + '" value="' + fieldValue + '">\n\n패스워드(' + fieldValue + ')가 브라우저로 전송되는 HTML에 그대로 포함되어 있습니다.',
+            code: null
+          });
+          steps.push({
+            title: '패스워드를 폼에 입력하고 제출',
+            desc: '발견된 패스워드: ' + fieldValue + '\n\n미션 페이지 Password 입력란에 위 값을 입력하고 Submit을 누르세요.',
+            code: attackBase + '/'
+          });
+
+        } else if (fieldValue) {
+          // 기타 hidden 필드
+          steps.push({
+            title: 'hidden 필드 발견: ' + fieldName + ' = ' + fieldValue,
+            desc: '페이지 소스에서 숨겨진 필드를 발견했습니다. 이 값을 미션 폼에 시도해보세요.',
+            code: attackBase + '/'
+          });
+        }
+      });
+
+    } else if (jsVars.length > 0) {
+      jsVars.forEach(function(hint) {
+        // "[JS VAR] pass='secretpassword'"
+        var valM = hint.match(/'([^']+)'/);
+        var val = valM ? valM[1] : '';
+        steps.push({
+          title: '취약점 확인: JS 소스에 패스워드 평문 노출',
+          desc: '미션 페이지의 JavaScript에서 아래 코드가 발견됐습니다.\n\n    ' + hint.replace('[JS VAR] ', 'var ').replace('[JS COMPARE] ', '// compare: ') + '\n\n클라이언트 측에서 패스워드를 검증하기 때문에 소스만 보면 바로 알 수 있습니다.',
+          code: null
+        });
+        if (val) {
+          steps.push({
+            title: '패스워드를 폼에 입력하고 제출',
+            desc: '발견된 패스워드: ' + val + '\n\n미션 페이지 Password 입력란에 위 값을 입력하고 Submit을 누르세요.',
+            code: attackBase + '/'
+          });
+        }
+      });
+
+    } else {
+      // 세션 OK지만 특정 데이터 없음 — 수동 확인 안내
+      steps = [
+        {
+          title: '미션 페이지 접속 후 소스 확인',
+          desc: '아래 URL을 브라우저에서 열고 Ctrl+U로 페이지 소스를 여세요.\n그 다음 Ctrl+F를 눌러 hidden, password, pass, var pass 등을 검색합니다.',
+          code: attackBase + '/'
+        },
+        {
+          title: 'Network 탭에서 요청 파악',
+          desc: 'F12 → Network 탭을 열고 미션 폼을 Submit하면\n어떤 파라미터로 요청이 가는지 확인할 수 있습니다.',
+          code: null
+        }
+      ];
+    }
+
+    return steps;
+
+  // ── Default ───────────────────────────────────────────────────────
   } else {
     return [
-      {title: '사이트 열기', desc: '대상 사이트를 새 탭으로 엽니다.', code: baseUrl},
-      {title: 'XSS 취약 페이지 확인', desc: '페이로드가 실행된 페이지에서 alert 팝업이 뜨는지 확인합니다.', code: d.attack_url}
+      {
+        title: '대상 사이트 열기',
+        desc: '대상 사이트를 새 탭으로 엽니다.',
+        code: baseUrl
+      },
+      {
+        title: '공격 URL 접속',
+        desc: '아래 URL에 직접 접속해 응답을 확인하세요.',
+        code: d.attack_url || ''
+      }
     ];
   }
 }
 
 function buildImpacts(attackType) {
-  if (attackType === 'SQL Injection') {
+  var m = '–';
+  if (attackType === 'Auth Bypass') {
     return [
-      {icon: '&#128272;', text: '관리자 계정 무단 로그인 — 비밀번호 없이 접근 가능'},
-      {icon: '&#128065;', text: '전체 사용자 개인정보 열람 (이메일, 비밀번호 해시, 주소)'},
-      {icon: '&#128230;', text: '모든 주문 내역 및 결제 정보 접근'},
-      {icon: '&#9881;', text: '관리자 패널에서 상품 추가/삭제/수정 가능'},
-      {icon: '&#128193;', text: '숨겨진 상품 및 개발자 정보 열람'},
+      {icon: m, text: '관리자 계정 무단 로그인 — 패스워드 없이 관리자 권한 획득'},
+      {icon: m, text: '전체 사용자 PII 열람 가능 (이메일, 패스워드 해시, 주소)'},
+      {icon: m, text: '주문·결제 데이터 접근 / 관리자 패널 상품·유저 데이터 조작'},
+    ];
+  } else if (attackType === 'XSS') {
+    return [
+      {icon: m, text: '피해자 브라우저에서 임의 JS 실행'},
+      {icon: m, text: '세션 쿠키 탈취 후 계정 하이재킹 가능'},
+      {icon: m, text: '키로거 삽입 — 입력값(패스워드, 카드번호 등) 실시간 수집'},
+    ];
+  } else if (attackType === 'LFI') {
+    return [
+      {icon: m, text: '/etc/passwd 등 시스템 파일 읽기'},
+      {icon: m, text: 'SSH 개인키, .env, 설정파일, 소스코드 취득 가능'},
     ];
   } else if (attackType === 'IDOR') {
     return [
-      {icon: '&#128065;', text: '다른 사용자의 개인정보 무단 열람'},
-      {icon: '&#9999;', text: '다른 사용자의 주문 수정 또는 삭제'},
+      {icon: m, text: '인증 없이 타 사용자 데이터 열람'},
+      {icon: m, text: '타 사용자 주문/개인정보 수정 또는 삭제 가능'},
+    ];
+  } else if (attackType === 'Recon') {
+    return [
+      {icon: m, text: 'robots.txt를 통해 숨겨진 관리 경로(/admin 등) 파악'},
+      {icon: m, text: '민감 파일(.htpasswd, .env) 위치 특정 — 추가 공격 진입점'},
+    ];
+  } else if (attackType === 'CTF Mission') {
+    return [
+      {icon: m, text: '페이지 소스에서 평문 패스워드 또는 파일 경로 노출'},
+      {icon: m, text: 'hidden 필드, JS 변수, 서버 파일에 인증 정보가 평문 저장됨'},
     ];
   } else {
     return [
-      {icon: '&#128125;', text: '사용자 브라우저에서 임의 스크립트 실행'},
-      {icon: '&#128272;', text: '세션 쿠키 탈취로 계정 탈취 가능'},
+      {icon: m, text: '인증 우회 또는 민감 데이터 노출 취약점 확인됨'},
     ];
   }
 }
@@ -990,9 +1414,28 @@ function buildCurl(d) {
   return 'curl "' + d.attack_url + '"';
 }
 
+function copyStepCode(idx) {
+  var el = document.getElementById('gstep-code-' + idx);
+  if (el) navigator.clipboard.writeText(el.textContent.trim());
+}
+
 function copyToken() {
   var el = document.getElementById('jwt-token-val');
   if (el) navigator.clipboard.writeText(el.textContent);
+}
+
+function copyExploitJwt() {
+  var el = document.getElementById('exploit-jwt-val');
+  if (el) navigator.clipboard.writeText(el.textContent);
+}
+
+function copyLsCmd() {
+  var el = document.getElementById('exploit-ls-cmd');
+  if (el) {
+    // 버튼 텍스트 제외하고 순수 명령어만 복사
+    var text = el.childNodes[0] ? el.childNodes[0].textContent : el.textContent;
+    navigator.clipboard.writeText(text.trim());
+  }
 }
 
 function copyCurl() {

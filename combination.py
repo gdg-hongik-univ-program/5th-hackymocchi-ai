@@ -17,9 +17,9 @@ from pydantic import BaseModel
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.retrievers import BM25Retriever
-from langchain.retrievers import EnsembleRetriever
+from langchain_classic.retrievers import EnsembleRetriever
 from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
-from langchain.schema import Document
+from langchain_core.documents import Document
 from groq import Groq
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
