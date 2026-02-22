@@ -10,5 +10,6 @@ fastapi
 uvicorn[standard]
 langchain
 langchain-community
+langchain-classic
 flashrank
 deep-translator

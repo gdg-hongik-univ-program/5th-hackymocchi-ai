@@ -1,0 +1,546 @@
+{
+  "config": {
+    "top_k": 10,
+    "bm25_limit": 8000,
+    "num_queries": 12,
+    "recall_method": "self-pooling"
+  },
+  "averages": {
+    "Vector Only": {
+      "precision": 0.9833333333333334,
+      "recall": 0.3794107890184852,
+      "f1": 0.5444100105133785,
+      "latency_ms": 30.002673467000324
+    },
+    "BM25 Only": {
+      "precision": 0.9166666666666666,
+      "recall": 0.34171237632007245,
+      "f1": 0.4962149260279714,
+      "latency_ms": 10.411401589711508
+    },
+    "Hybrid": {
+      "precision": 0.9166666666666666,
+      "recall": 0.34171237632007245,
+      "f1": 0.4962149260279714,
+      "latency_ms": 24.5896577835083
+    },
+    "Hybrid+Rerank": {
+      "precision": 1.0,
+      "recall": 0.11620418908649793,
+      "f1": 0.20763566977763306,
+      "latency_ms": 68.77468029658
+    },
+    "RRF Hybrid": {
+      "precision": 0.9583333333333334,
+      "recall": 0.3648605244682206,
+      "f1": 0.5259768307898761,
+      "latency_ms": 44.910689194997154
+    },
+    "Multi-Query": {
+      "precision": 0.9583333333333334,
+      "recall": 0.36640373434476387,
+      "f1": 0.5274247072377526,
+      "latency_ms": 161.5010698636373
+    },
+    "Multi-Query+Groq": {
+      "precision": 0.8916666666666666,
+      "recall": 0.34089591946913284,
+      "f1": 0.49067583056952113,
+      "latency_ms": 702.3854454358419
+    }
+  },
+  "per_query": {
+    "q01": {
+      "type": "SQLi",
+      "query": "SQL injection authentication bypass login",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.5555555555555556,
+          "f1": 0.7142857142857143
+        },
+        "BM25 Only": {
+          "precision": 0.1,
+          "recall": 0.05555555555555555,
+          "f1": 0.07142857142857142
+        },
+        "Hybrid": {
+          "precision": 0.1,
+          "recall": 0.05555555555555555,
+          "f1": 0.07142857142857142
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.16666666666666666,
+          "f1": 0.2857142857142857
+        },
+        "RRF Hybrid": {
+          "precision": 0.6,
+          "recall": 0.3333333333333333,
+          "f1": 0.42857142857142855
+        },
+        "Multi-Query": {
+          "precision": 0.7,
+          "recall": 0.3888888888888889,
+          "f1": 0.5
+        },
+        "Multi-Query+Groq": {
+          "precision": 0.7,
+          "recall": 0.3888888888888889,
+          "f1": 0.5
+        }
+      }
+    },
+    "q02": {
+      "type": "XSS",
+      "query": "cross-site scripting XSS payload script alert",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.30303030303030304,
+          "f1": 0.4651162790697675
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.30303030303030304,
+          "f1": 0.4651162790697675
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.30303030303030304,
+          "f1": 0.4651162790697675
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.09090909090909091,
+          "f1": 0.16666666666666669
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.30303030303030304,
+          "f1": 0.4651162790697675
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.30303030303030304,
+          "f1": 0.4651162790697675
+        },
+        "Multi-Query+Groq": {
+          "precision": 1.0,
+          "recall": 0.30303030303030304,
+          "f1": 0.4651162790697675
+        }
+      }
+    },
+    "q03": {
+      "type": "LFI",
+      "query": "local file inclusion path traversal directory",
+      "scores": {
+        "Vector Only": {
+          "precision": 0.8,
+          "recall": 0.38095238095238093,
+          "f1": 0.5161290322580645
+        },
+        "BM25 Only": {
+          "precision": 0.9,
+          "recall": 0.42857142857142855,
+          "f1": 0.5806451612903225
+        },
+        "Hybrid": {
+          "precision": 0.9,
+          "recall": 0.42857142857142855,
+          "f1": 0.5806451612903225
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.14285714285714285,
+          "f1": 0.25
+        },
+        "RRF Hybrid": {
+          "precision": 0.9,
+          "recall": 0.42857142857142855,
+          "f1": 0.5806451612903225
+        },
+        "Multi-Query": {
+          "precision": 0.9,
+          "recall": 0.42857142857142855,
+          "f1": 0.5806451612903225
+        },
+        "Multi-Query+Groq": {
+          "precision": 0.7,
+          "recall": 0.3333333333333333,
+          "f1": 0.45161290322580644
+        }
+      }
+    },
+    "q04": {
+      "type": "Web Attack",
+      "query": "web attack vulnerability exploit remote code execution",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.1,
+          "f1": 0.18181818181818182
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "Multi-Query+Groq": {
+          "precision": 0.9,
+          "recall": 0.3,
+          "f1": 0.45000000000000007
+        }
+      }
+    },
+    "q05": {
+      "type": "SQLi (Union)",
+      "query": "SQL union select injection database dump",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.1111111111111111,
+          "f1": 0.19999999999999998
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "Multi-Query+Groq": {
+          "precision": 0.9,
+          "recall": 0.3333333333333333,
+          "f1": 0.48648648648648646
+        }
+      }
+    },
+    "q06": {
+      "type": "XSS (Stored)",
+      "query": "stored cross-site scripting persistent XSS cookie",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.11538461538461539,
+          "f1": 0.20689655172413793
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "Multi-Query+Groq": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        }
+      }
+    },
+    "q07": {
+      "type": "SQLi (Blind)",
+      "query": "blind SQL injection boolean time-based exploit",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.43478260869565216,
+          "f1": 0.6060606060606061
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.43478260869565216,
+          "f1": 0.6060606060606061
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.43478260869565216,
+          "f1": 0.6060606060606061
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.13043478260869565,
+          "f1": 0.23076923076923078
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.43478260869565216,
+          "f1": 0.6060606060606061
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.43478260869565216,
+          "f1": 0.6060606060606061
+        },
+        "Multi-Query+Groq": {
+          "precision": 1.0,
+          "recall": 0.43478260869565216,
+          "f1": 0.6060606060606061
+        }
+      }
+    },
+    "q08": {
+      "type": "LFI (PHP)",
+      "query": "PHP local file inclusion filter wrapper bypass",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.1,
+          "f1": 0.18181818181818182
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        },
+        "Multi-Query+Groq": {
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5
+        }
+      }
+    },
+    "q09": {
+      "type": "SQLi (Auth)",
+      "query": "SQL injection login form bypass authentication admin",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.11538461538461539,
+          "f1": 0.20689655172413793
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        },
+        "Multi-Query+Groq": {
+          "precision": 1.0,
+          "recall": 0.38461538461538464,
+          "f1": 0.5555555555555556
+        }
+      }
+    },
+    "q10": {
+      "type": "XSS (Reflected)",
+      "query": "reflected XSS URL parameter script injection",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.35714285714285715,
+          "f1": 0.5263157894736842
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.35714285714285715,
+          "f1": 0.5263157894736842
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.35714285714285715,
+          "f1": 0.5263157894736842
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.10714285714285714,
+          "f1": 0.19354838709677416
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.35714285714285715,
+          "f1": 0.5263157894736842
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.35714285714285715,
+          "f1": 0.5263157894736842
+        },
+        "Multi-Query+Groq": {
+          "precision": 1.0,
+          "recall": 0.35714285714285715,
+          "f1": 0.5263157894736842
+        }
+      }
+    },
+    "q11": {
+      "type": "Web Attack (RCE)",
+      "query": "remote code execution command injection web exploit",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.3448275862068966,
+          "f1": 0.5128205128205129
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.3448275862068966,
+          "f1": 0.5128205128205129
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.3448275862068966,
+          "f1": 0.5128205128205129
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.10344827586206896,
+          "f1": 0.1875
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.3448275862068966,
+          "f1": 0.5128205128205129
+        },
+        "Multi-Query": {
+          "precision": 1.0,
+          "recall": 0.3448275862068966,
+          "f1": 0.5128205128205129
+        },
+        "Multi-Query+Groq": {
+          "precision": 0.7,
+          "recall": 0.2413793103448276,
+          "f1": 0.358974358974359
+        }
+      }
+    },
+    "q12": {
+      "type": "LFI (Traversal)",
+      "query": "directory traversal path LFI etc passwd shadow",
+      "scores": {
+        "Vector Only": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "BM25 Only": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "Hybrid": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "Hybrid+Rerank": {
+          "precision": 1.0,
+          "recall": 0.1111111111111111,
+          "f1": 0.19999999999999998
+        },
+        "RRF Hybrid": {
+          "precision": 1.0,
+          "recall": 0.37037037037037035,
+          "f1": 0.5405405405405406
+        },
+        "Multi-Query": {
+          "precision": 0.9,
+          "recall": 0.3333333333333333,
+          "f1": 0.48648648648648646
+        },
+        "Multi-Query+Groq": {
+          "precision": 0.8,
+          "recall": 0.2962962962962963,
+          "f1": 0.43243243243243246
+        }
+      }
+    }
+  }
+}
