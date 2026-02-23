@@ -5,6 +5,7 @@ Professional pentest report layout using ReportLab Platypus
 import io
 import os
 import re
+import html
 from datetime import datetime, timezone, timedelta
 
 from reportlab.lib import colors
@@ -478,7 +479,9 @@ def build_pdf(state: dict, atype: str) -> bytes:
                     "정기적인 모의침투 테스트와 취약점 스캔을 권장합니다."),
     }
     analysis_text = ANALYSIS.get(atype, "취약점이 확인되었습니다.")
-    story.append(Paragraph(analysis_text, styles["analysis"]))
+    # ReportLab Paragraph는 HTML 유사 마크업을 파싱하므로
+    # <script> 같은 문자열은 escape해서 렌더 오류를 방지한다.
+    story.append(Paragraph(html.escape(analysis_text), styles["analysis"]))
     story.append(Spacer(1, 14))
 
     # 4. Remediation

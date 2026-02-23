@@ -13,3 +13,4 @@ langchain-community
 langchain-classic
 flashrank
 deep-translator
+reportlab

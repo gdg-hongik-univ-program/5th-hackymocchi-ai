@@ -847,7 +847,30 @@ function handleEvent(type, data) {
   if (type === 'pipeline_init') initPipeline(data);
   else if (type === 'step_update') updateStep(data);
   else if (type === 'stage') handleStage(data.stage, data.data);
-  else if (type === 'done') { renderResult(data); finishAnalysis(); }
+  else if (type === 'done') {
+    // done은 최종 state 스냅샷이므로 Exploit 섹션을 최종값으로 동기화한다.
+    if (data && data.attack_url) {
+      var finalExploit = {
+        is_success: !!data.is_success,
+        attempt: data.attempts || 0,
+        status_code: data.status_code,
+        feedback: data.feedback || '',
+        indicators_found: data.indicators_found || [],
+        jwt_token: data.jwt_token || null,
+        captured_email: data.captured_email || null,
+        captured_role: data.captured_role || null,
+        response_preview: data.response_preview || '',
+        attack_url: data.attack_url || '',
+        attack_method: data.attack_method || '',
+        attack_data: data.attack_data || {},
+        target_url: data.target_url || '',
+      };
+      renderExploit(finalExploit);
+      _lastReportState = finalExploit;
+    }
+    renderResult(data);
+    finishAnalysis();
+  }
   else if (type === 'error') {
     alert('오류 발생: ' + (data.message || '알 수 없는 오류'));
     finishAnalysis();
@@ -1061,6 +1084,14 @@ function renderGuide(d) {
     attackType = 'CTF Mission';
   } else if (url.indexOf('/feed.gtl') !== -1 || url.indexOf('/snippets.gtl') !== -1 || inds.indexOf('_feed(') !== -1 || inds.indexOf('_snippet(') !== -1) {
     attackType = 'XSSI';
+  } else if (url.indexOf('/SqlInjection/') !== -1 || url.indexOf('/sqlinjection/') !== -1) {
+    attackType = 'SQL Injection';
+  } else if (url.indexOf('/access-control/') !== -1 || url.indexOf('/user-info') !== -1) {
+    attackType = 'IDOR';
+  } else if (url.indexOf('/PathTraversal/') !== -1 || url.indexOf('/pathtraversal/') !== -1) {
+    attackType = 'LFI';
+  } else if (url.indexOf('/CrossSiteScripting/') !== -1 || url.indexOf('/crosssitescripting/') !== -1) {
+    attackType = 'XSS';
   } else if (exp.indexOf('<script') !== -1 || exp.indexOf('onerror') !== -1 || url.indexOf('search?q=') !== -1 || url.indexOf('search/?q=') !== -1) {
     attackType = 'XSS';
   } else if (url.indexOf('passwd') !== -1 || url.indexOf('../') !== -1 || url.indexOf('..%2F') !== -1) {
@@ -1520,7 +1551,11 @@ function downloadPdf() {
     body: JSON.stringify(payload),
   })
   .then(function(res) {
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      return res.text().then(function(t) {
+        throw new Error(t || ('HTTP ' + res.status));
+      });
+    }
     return res.blob();
   })
   .then(function(blob) {
