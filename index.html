@@ -582,6 +582,16 @@ a:hover{text-decoration:underline;}
     <div class="section-body" id="body-report"></div>
   </div>
 
+  <!-- ── PDF Export Button ──────────────────────────────────────── -->
+  <div id="pdf-bar" style="display:none;margin-bottom:32px;">
+    <button id="btn-pdf" onclick="downloadPdf()" style="
+      width:100%;padding:14px;
+      background:#1565C0;color:#fff;border:none;border-radius:6px;
+      font-family:var(--font-mono);font-size:12px;font-weight:700;
+      letter-spacing:1px;cursor:pointer;
+    ">EXPORT PDF REPORT</button>
+  </div>
+
 </div>
 
 <script>
@@ -589,6 +599,8 @@ a:hover{text-decoration:underline;}
    GLOBALS
 ═══════════════════════════════════════════════════════════════════ */
 var analysisRunning = false;
+var _lastReportState = null;  // stores exploit_result data for PDF export
+var _lastReconState  = null;  // stores recon_result data for PDF export
 var stepTimers = {};
 var startedAt = null;
 var elapsedInterval = null;
@@ -697,9 +709,13 @@ function resetUI() {
   ['sec-recon','sec-retrieve','sec-payload','sec-exploit','sec-report'].forEach(function(id) {
     document.getElementById(id).style.display = 'none';
   });
+  document.getElementById('pdf-bar').style.display = 'none';
   ['body-recon','body-retrieve','body-payload','body-exploit','body-report'].forEach(function(id) {
     document.getElementById(id).innerHTML = '';
   });
+
+  _lastReportState = null;
+  _lastReconState  = null;
 
   Object.keys(stepTimers).forEach(function(k) {
     if (stepTimers[k]) clearInterval(stepTimers[k]);
@@ -892,10 +908,10 @@ function updateProgress(completedSteps) {
 ═══════════════════════════════════════════════════════════════════ */
 function handleStage(stage, data) {
   if (stage === 'login_result') renderLogin(data);
-  else if (stage === 'recon_result') renderRecon(data);
+  else if (stage === 'recon_result') { renderRecon(data); _lastReconState = data; }
   else if (stage === 'retrieve_result') renderRetrieve(data);
   else if (stage === 'generate_result') renderPayload(data);
-  else if (stage === 'exploit_result') renderExploit(data);
+  else if (stage === 'exploit_result') { renderExploit(data); _lastReportState = data; }
   else if (stage === 'report_result') renderReport(data);
 }
 
@@ -1452,6 +1468,54 @@ function renderReport(d) {
   var body = document.getElementById('body-report');
   sec.style.display = 'block';
   body.innerHTML = '<div class="report-body">' + markdownToHtml(d.report) + '</div>';
+  document.getElementById('pdf-bar').style.display = 'block';
+}
+
+function downloadPdf() {
+  var btn = document.getElementById('btn-pdf');
+  btn.textContent = 'GENERATING...';
+  btn.disabled = true;
+
+  // Merge recon + exploit data (exploit fields win on conflict)
+  var payload = Object.assign({}, _lastReconState || {}, _lastReportState || {});
+
+  // Map recon field names to what pdf_report.py expects
+  if (!payload.target_ip  && payload.ip)   payload.target_ip   = payload.ip;
+  if (!payload.detected_tech && payload.tech) payload.detected_tech = payload.tech;
+  // Normalize attempt (singular) → attempts (plural)
+  if (payload.attempt != null && payload.attempts == null) payload.attempts = payload.attempt;
+
+  // Fallback: read target URL from input if missing
+  if (!payload.target_url) {
+    var urlEl = document.getElementById('target-url');
+    if (urlEl) payload.target_url = urlEl.value || '';
+  }
+
+  fetch('/api/report/pdf', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  })
+  .then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.blob();
+  })
+  .then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    // filename: pentest_report_YYYYMMDD_HHMMSS.pdf
+    var ts = new Date().toISOString().replace(/[-:T]/g,'').slice(0,15);
+    a.download = 'pentest_report_' + ts + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(url); a.remove(); }, 2000);
+  })
+  .catch(function(e) { alert('PDF 생성 실패: ' + e.message); })
+  .finally(function() {
+    btn.textContent = 'PDF EXPORT';
+    btn.disabled = false;
+  });
 }
 
 function renderResult(d) {

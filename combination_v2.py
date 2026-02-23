@@ -10,7 +10,7 @@ from typing import AsyncGenerator, List, Optional
 from urllib.parse import urlparse
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from pydantic import BaseModel
 
 # ── Vector Only Imports (BM25/Reranker 제거) ───────────────────────
@@ -177,6 +177,21 @@ async def analyze(req: AnalyzeRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/api/report/pdf")
+async def export_pdf(state: dict):
+    try:
+        from pdf_report import build_pdf, _detect_attack_type as _pdf_detect
+        atype = _pdf_detect(state) if state.get("is_success") else "none"
+        pdf_bytes = await asyncio.to_thread(build_pdf, state, atype)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=pentest_report.pdf"},
+        )
+    except Exception as e:
+        return Response(content=f"PDF 생성 오류: {e}", status_code=500)
 
 
 def emit(event_type: str, data: dict) -> str:
@@ -814,10 +829,140 @@ def _exploit(state: dict) -> dict:
         }
 
 
+def _detect_attack_type(state: dict) -> str:
+    """발견된 지표와 공격 URL에서 실제 공격 유형을 판별."""
+    url = state.get("_attack_url", "").lower()
+    indicators = " ".join(state.get("_indicators_found", []))
+
+    if "/missions/" in url or "[HIDDEN INPUT]" in indicators or "[JS VAR]" in indicators:
+        return "ctf"
+    if state.get("_jwt_token") or "jwt token captured" in indicators.lower():
+        return "sqli_auth"
+    if "<script>" in url or "alert(" in url or "xss" in url:
+        return "xss"
+    if "etc/passwd" in url or "../" in url or "root:x:0:0:" in indicators:
+        return "lfi"
+    if re.search(r'/api/users?', url) and state.get("http_method", "") == "GET":
+        return "idor"
+    if any(x in url for x in ["robots.txt", ".htpasswd", ".env", ".bak", "/admin"]):
+        return "recon"
+    if any(x in url for x in ["or 1=1", "or true", "union select", "' or"]) or "SQL syntax" in indicators:
+        return "sqli"
+    return "generic"
+
+
 def _build_report(state: dict) -> str:
     status = "공격 성공 ✅" if state["is_success"] else "공격 실패 ❌"
     indicators = ", ".join(state.get("_indicators_found", [])) or "없음"
     post_data_str = json.dumps(state.get("post_data", {}), ensure_ascii=False) or "없음"
+
+    atype = _detect_attack_type(state) if state["is_success"] else "none"
+
+    # ── 공격 유형별 표시명 ────────────────────────────────────────────
+    type_name = {
+        "ctf":       "Sensitive Data Exposure (CTF Mission)",
+        "sqli_auth": "SQL Injection — Auth Bypass",
+        "xss":       "Cross-Site Scripting (XSS)",
+        "lfi":       "Local File Inclusion (LFI) / Path Traversal",
+        "idor":      "Insecure Direct Object Reference (IDOR)",
+        "recon":     "Information Disclosure",
+        "sqli":      "SQL Injection",
+        "generic":   "Web Vulnerability",
+        "none":      "해당 없음",
+    }.get(atype, "Web Vulnerability")
+
+    # ── 결과 분석 텍스트 ─────────────────────────────────────────────
+    analysis = {
+        "ctf": (
+            "페이지 소스에 인증 정보가 노출되어 있습니다. "
+            "hidden input 필드 또는 JS 변수에 패스워드가 평문으로 포함되어 있어 "
+            "소스 보기만으로 누구든 미션을 통과할 수 있습니다."
+        ),
+        "sqli_auth": (
+            "SQL Injection을 통한 인증 우회에 성공하여 JWT 토큰이 탈취되었습니다. "
+            "입력값이 SQL 쿼리에 직접 삽입되고 있으며, 공격자는 패스워드 없이 "
+            "임의 계정(관리자 포함)으로 로그인할 수 있습니다."
+        ),
+        "xss": (
+            "사용자 입력값이 HTML에 그대로 출력되어 스크립트 삽입이 가능합니다. "
+            "공격자는 피해자 브라우저에서 임의 코드를 실행하거나 세션 쿠키를 탈취할 수 있습니다."
+        ),
+        "lfi": (
+            "경로 탐색(Path Traversal) 취약점으로 서버 내부 파일 읽기에 성공했습니다. "
+            "공격자는 /etc/passwd, SSH 키, 소스코드, 설정파일 등을 읽을 수 있습니다."
+        ),
+        "idor": (
+            "접근 제어가 없는 API 엔드포인트에서 타 사용자 데이터 조회에 성공했습니다. "
+            "ID 값 조작만으로 모든 계정의 개인정보에 접근할 수 있습니다."
+        ),
+        "recon": (
+            "공개된 파일/경로를 통해 내부 구조 정보가 노출되었습니다. "
+            "수집된 정보는 추가 공격의 진입점으로 활용될 수 있습니다."
+        ),
+        "sqli": (
+            "SQL Injection 취약점이 확인되었습니다. "
+            "입력값이 SQL 쿼리에 직접 삽입되어 DB 데이터 열람 및 인증 우회가 가능합니다."
+        ),
+        "generic": "취약점이 확인되었습니다. 상세 내용은 발견된 성공 지표를 참고하세요.",
+        "none": "현재 설정으로는 취약점을 확인하지 못했습니다. 더 정교한 페이로드가 필요하거나 대상이 방어 기법을 적용하고 있을 수 있습니다.",
+    }.get(atype, "취약점이 확인되었습니다.")
+
+    # ── 권장 조치사항 ────────────────────────────────────────────────
+    remediation = {
+        "ctf": [
+            "서버 측 패스워드 파일에 대한 외부 접근 차단 (웹 루트 외부에 저장)",
+            "HTML 소스에 인증 정보(hidden field, JS 변수)를 절대 포함하지 않기",
+            "인증 로직은 반드시 서버 사이드에서만 처리",
+        ],
+        "sqli_auth": [
+            "Prepared Statements (매개변수화된 쿼리) 사용",
+            "ORM 사용으로 직접 SQL 조합 제거",
+            "입력값 유효성 검사 — 특수문자 필터링",
+            "에러 메시지에 SQL 정보 노출 금지",
+            "DB 계정 최소 권한 원칙 적용",
+        ],
+        "xss": [
+            "모든 출력값에 HTML 이스케이핑 적용 (htmlspecialchars 등)",
+            "Content-Security-Policy (CSP) 헤더 설정",
+            "HttpOnly / Secure 쿠키 플래그 설정으로 쿠키 탈취 방지",
+            "입력값 화이트리스트 기반 검증",
+        ],
+        "lfi": [
+            "파일 경로에 사용자 입력값 직접 사용 금지",
+            "허용된 파일 목록(화이트리스트)만 접근 허용",
+            "open_basedir 설정으로 웹 루트 외부 접근 차단",
+            "입력값에서 ../ 시퀀스 필터링",
+        ],
+        "idor": [
+            "모든 API 요청에 인증 및 권한 검사 적용",
+            "리소스 접근 시 소유권 검증 (현재 로그인 사용자 소유 여부)",
+            "순차적 ID 대신 UUID 사용으로 열거 공격 방지",
+        ],
+        "recon": [
+            "robots.txt에 민감한 경로 노출 금지",
+            "불필요한 파일 (.htpasswd, .env, .bak) 웹 루트에서 제거",
+            "디렉토리 리스팅 비활성화 (Options -Indexes)",
+            "민감한 파일에 대한 웹 서버 수준 접근 제한",
+        ],
+        "sqli": [
+            "Prepared Statements (매개변수화된 쿼리) 사용",
+            "입력값 유효성 검사 및 특수문자 필터링",
+            "WAF(Web Application Firewall) 도입",
+            "에러 메시지에 SQL 정보 노출 금지",
+            "최소 권한 원칙 — DB 계정에 필요한 권한만 부여",
+        ],
+        "generic": [
+            "입력값 검증 및 화이트리스트 기반 필터링",
+            "WAF 도입",
+            "정기적인 보안 취약점 점검 실시",
+        ],
+        "none": [
+            "정기적인 모의해킹 및 취약점 스캔 수행",
+            "WAF 및 보안 모니터링 유지",
+        ],
+    }.get(atype, ["입력값 검증 강화", "WAF 도입", "정기 보안 점검"])
+
+    remediation_str = "\n".join(f"{i+1}. {r}" for i, r in enumerate(remediation))
 
     return f"""## 테스트 결과 보고서
 
@@ -830,29 +975,20 @@ def _build_report(state: dict) -> str:
 - **총 시도 횟수**: {state['attempts']}회
 
 ### 2. 사용된 공격 기법
-- **공격 타입**: SQL Injection / Web Vulnerability
+- **공격 타입**: {type_name}
 - **HTTP 메소드**: {state.get('http_method', 'GET')}
 - **최종 페이로드 URL**: `{state['final_payload']}`
 - **POST 데이터**: `{post_data_str}`
 - **발견된 성공 지표**: {indicators}
 
 ### 3. 결과 분석
-{
-    '취약점 발견: 입력값이 SQL 쿼리에 직접 삽입되는 SQL Injection 취약점이 존재합니다. 공격자가 인증 없이 관리자 권한을 탈취할 수 있습니다.'
-    if state['is_success'] else
-    '취약점 미발견: 현재 설정으로는 공격이 성공하지 않았습니다. 더 정교한 페이로드가 필요하거나 대상이 방어 기법을 적용하고 있을 수 있습니다.'
-}
+{analysis}
 
 ### 4. 권장 조치사항
-1. **Prepared Statements** (매개변수화된 쿼리) 사용
-2. **입력값 검증** 및 화이트리스트 기반 필터링
-3. **WAF(Web Application Firewall)** 도입
-4. **에러 메시지 숨김** - SQL 에러를 사용자에게 노출하지 않기
-5. **최소 권한 원칙** - DB 계정에 최소한의 권한만 부여
+{remediation_str}
 
 ---
-*이 테스트는 교육용 취약 애플리케이션(OWASP Juice Shop 등)을 대상으로 수행되었습니다.*
-*반드시 **허가된 시스템**에서만 테스트를 수행하십시오.*"""
+*반드시 허가된 시스템에서만 테스트를 수행하십시오.*"""
 
 
 def _web_fallback_context(tech: str) -> str:
