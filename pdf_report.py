@@ -53,6 +53,7 @@ RISK_MAP = {
     "ctf":       ("MEDIUM",   C_YELLOW,  "CVSS 5.3"),
     "sqli_auth": ("CRITICAL", C_RED,     "CVSS 9.8"),
     "xss":       ("HIGH",     C_ORANGE,  "CVSS 7.4"),
+    "xssi":      ("MEDIUM",   C_YELLOW,  "CVSS 6.1"),
     "lfi":       ("CRITICAL", C_RED,     "CVSS 9.1"),
     "idor":      ("HIGH",     C_ORANGE,  "CVSS 7.5"),
     "recon":     ("MEDIUM",   C_YELLOW,  "CVSS 5.3"),
@@ -65,6 +66,7 @@ TYPE_NAME_MAP = {
     "ctf":       "Sensitive Data Exposure (CTF Mission)",
     "sqli_auth": "SQL Injection — Auth Bypass",
     "xss":       "Cross-Site Scripting (XSS)",
+    "xssi":      "Cross-Site Script Inclusion (XSSI)",
     "lfi":       "Local File Inclusion / Path Traversal",
     "idor":      "Insecure Direct Object Reference (IDOR)",
     "recon":     "Information Disclosure",
@@ -82,6 +84,23 @@ def _detect_attack_type(state: dict) -> str:
     ind_list = state.get("_indicators_found") or state.get("indicators_found", [])
     indicators = " ".join(ind_list)
 
+    # ── WebGoat ───────────────────────────────────────────────────────
+    if "webgoat" in url:
+        if "sqlinjection" in url or "sqli" in url:
+            return "sqli"
+        if "crosssitescripting" in url or "xss" in url:
+            return "xss"
+        if "jwt" in url:
+            return "sqli_auth"
+        if "access-control" in url:
+            return "idor"
+        return "sqli"
+    # ── Gruyere / XSSI ───────────────────────────────────────────────
+    if "feed.gtl" in url or "snippets.gtl" in url:
+        return "xssi"
+    if "gruyere" in url and ("<script>" in url or "onerror" in url or "alert(" in url):
+        return "xss"
+    # ── Standard types ────────────────────────────────────────────────
     if "/missions/" in url or "[HIDDEN INPUT]" in indicators or "[JS VAR]" in indicators:
         return "ctf"
     if state.get("_jwt_token") or state.get("jwt_token") or "jwt token captured" in indicators.lower():
@@ -427,6 +446,12 @@ def build_pdf(state: dict, atype: str) -> bytes:
             "브라우저에서 임의 코드를 실행하거나 세션 쿠키를 탈취할 수 있습니다. "
             "이는 OWASP Top 10 A03:2021 Injection에 해당하며 모든 출력에 이스케이핑이 필요합니다."
         ),
+        "xssi": (
+            "Cross-Site Script Inclusion(XSSI) 취약점이 확인되었습니다. feed.gtl 등 JSON 데이터를 "
+            "JavaScript 함수 호출 형태로 반환하는 엔드포인트가 교차 출처 <script> 태그로 포함 가능합니다. "
+            "공격자가 제어하는 페이지에서 피해자의 인증된 스니펫·개인정보를 탈취할 수 있으며, "
+            "이는 OWASP Top 10 A02:2021 Cryptographic Failures / 정보 노출에 해당합니다."
+        ),
         "lfi": (
             "경로 탐색(Path Traversal) 취약점으로 서버 내부 파일 읽기에 성공했습니다. "
             "공격자는 /etc/passwd, SSH 키, 소스코드, 설정파일 등을 읽을 수 있습니다. "
@@ -468,6 +493,11 @@ def build_pdf(state: dict, atype: str) -> bytes:
                       "입력값 유효성 검사 — 특수문자 필터링",
                       "에러 메시지에 SQL 정보 노출 금지",
                       "DB 계정 최소 권한 원칙 적용"],
+        "xssi":      ["JSON 응답 앞에 )]}', 또는 while(1); prefix 삽입으로 JSON hijacking 방지",
+                      "동적 데이터를 JavaScript 함수 호출 형태(JSONP)로 반환하지 말 것",
+                      "민감 API에 CORS 정책 적용 — 허용된 출처만 접근 가능하도록 설정",
+                      "응답 Content-Type을 application/json으로 설정 (text/javascript 금지)",
+                      "모든 민감 엔드포인트에 CSRF 토큰 및 인증 검증 추가"],
         "xss":       ["모든 출력값에 HTML 이스케이핑 적용 (htmlspecialchars 등)",
                       "Content-Security-Policy (CSP) 헤더 설정",
                       "HttpOnly / Secure 쿠키 플래그 설정으로 쿠키 탈취 방지",

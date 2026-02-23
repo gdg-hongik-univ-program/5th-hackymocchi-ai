@@ -1059,6 +1059,8 @@ function renderGuide(d) {
     attackType = 'Recon';
   } else if (url.indexOf('missions/basic') !== -1) {
     attackType = 'CTF Mission';
+  } else if (url.indexOf('/feed.gtl') !== -1 || url.indexOf('/snippets.gtl') !== -1 || inds.indexOf('_feed(') !== -1 || inds.indexOf('_snippet(') !== -1) {
+    attackType = 'XSSI';
   } else if (exp.indexOf('<script') !== -1 || exp.indexOf('onerror') !== -1 || url.indexOf('search?q=') !== -1 || url.indexOf('search/?q=') !== -1) {
     attackType = 'XSS';
   } else if (url.indexOf('passwd') !== -1 || url.indexOf('../') !== -1 || url.indexOf('..%2F') !== -1) {
@@ -1071,6 +1073,7 @@ function renderGuide(d) {
 
   var titleMap = {
     'Auth Bypass':   'SQLi Auth Bypass — JWT 토큰 획득',
+    'XSSI':          'XSSI — 교차 출처 데이터 노출',
     'XSS':           'Reflected XSS — 스크립트 실행 확인',
     'LFI':           'LFI / Path Traversal — 서버 파일 읽기',
     'IDOR':          'IDOR — 비인가 데이터 접근',
@@ -1083,6 +1086,7 @@ function renderGuide(d) {
   var baseUrl = (d.target_url || '').split('#')[0].replace(/\/$/, '');
   var subMap = {
     'Auth Bypass':   '탈취한 JWT 토큰으로 관리자 계정에 직접 접근하는 방법입니다.',
+    'XSSI':          '스크립트 포함으로 민감 데이터를 교차 출처에서 읽어오는 시나리오입니다.',
     'XSS':           'XSS 페이로드가 실행되는 URL에 접속하여 취약점을 재현합니다.',
     'LFI':           '경로 탐색 취약점으로 서버 내부 파일을 읽는 과정입니다.',
     'IDOR':          'ID 값 조작으로 타 사용자 데이터에 접근하는 과정입니다.',
@@ -1190,6 +1194,20 @@ function buildGuideSteps(attackType, baseUrl, d) {
     ];
 
   // ── XSS ───────────────────────────────────────────────────────────
+  } else if (attackType === 'XSSI') {
+    return [
+      {
+        title: '취약 엔드포인트 직접 확인',
+        desc: '아래 URL에 접속해 JavaScript 함수 형태(_feed/_snippet)로 데이터가 반환되는지 확인합니다.',
+        code: d.attack_url || ''
+      },
+      {
+        title: '공격자 페이지에서 script include',
+        desc: '다른 도메인 페이지에서 아래 스크립트 태그로 포함해도 데이터가 로드되면 XSSI 재현입니다.',
+        code: '<script src="' + (d.attack_url || '') + '"><\\/script>'
+      }
+    ];
+
   } else if (attackType === 'XSS') {
     return [
       {
@@ -1394,6 +1412,11 @@ function buildImpacts(attackType) {
       {icon: m, text: '세션 쿠키 탈취 후 계정 하이재킹 가능'},
       {icon: m, text: '키로거 삽입 — 입력값(패스워드, 카드번호 등) 실시간 수집'},
     ];
+  } else if (attackType === 'XSSI') {
+    return [
+      {icon: m, text: '교차 출처 script include로 민감 데이터 유출 가능'},
+      {icon: m, text: '사용자 인증 상태를 악용한 계정/스니펫 정보 탈취 가능'},
+    ];
   } else if (attackType === 'LFI') {
     return [
       {icon: m, text: '/etc/passwd 등 시스템 파일 읽기'},
@@ -1530,7 +1553,7 @@ function renderResult(d) {
     : '공격 실패: 현재 페이로드로는 취약점을 확인할 수 없습니다.';
   document.getElementById('result-meta').textContent =
     '시도 횟수: ' + d.attempts + '회  |  대상: ' + d.target_url +
-    '  |  IP: ' + (d.ip || 'Unknown');
+    '  |  IP: ' + (d.target_ip || d.ip || 'Unknown');
 }
 
 /* ── Row helper ───────────────────────────────────────────────────── */

